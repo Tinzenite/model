@@ -28,7 +28,7 @@ CreateModel creates a new model at the specified path for the given peer id. Wil
 not immediately update, must be explicitely called.
 */
 func CreateModel(root, peerid string) (*Model, error) {
-	if !IsTinzenite(root) {
+	if !shared.IsTinzenite(root) {
 		return nil, shared.ErrNotTinzenite
 	}
 	m := &Model{
@@ -44,7 +44,7 @@ LoadModel loads or creates a model for the given path, depending whether a
 model.json exists for it already.
 */
 func LoadModel(root string) (*Model, error) {
-	if !IsTinzenite(root) {
+	if !shared.IsTinzenite(root) {
 		return nil, shared.ErrNotTinzenite
 	}
 	var m *Model
@@ -74,7 +74,7 @@ TODO Get concurrency to work here. Last time I had trouble with the Objinfo map.
 */
 func (m *Model) PartialUpdate(scope string) error {
 	if m.Tracked == nil || m.Objinfo == nil {
-		return ErrNilInternalState
+		return shared.ErrNilInternalState
 	}
 	current, err := m.populateMap()
 	var removed, created []string
@@ -82,7 +82,7 @@ func (m *Model) PartialUpdate(scope string) error {
 		return err
 	}
 	// we'll need this for every create* op, so create only once:
-	relPath := createPathRoot(m.Root)
+	relPath := shared.CreatePathRoot(m.Root)
 	// now: compare old tracked with new version
 	for path := range m.Tracked {
 		// ignore if not in partial update path
@@ -122,7 +122,7 @@ func (m *Model) PartialUpdate(scope string) error {
 /*
 SyncModel TODO
 */
-func (m *Model) SyncModel(root *ObjectInfo) ([]*UpdateMessage, error) {
+func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, error) {
 	/*
 		TODO: how to implement this.
 		Maybe: make a check method that simply returns whether Tinzenite needs to
@@ -130,7 +130,7 @@ func (m *Model) SyncModel(root *ObjectInfo) ([]*UpdateMessage, error) {
 
 		Will also need to work on how TINZENITE fetches the files (from multiple etc.)
 	*/
-	return nil, ErrUnsupported
+	return nil, shared.ErrUnsupported
 }
 
 /*
@@ -138,9 +138,9 @@ SyncObject returns an UpdateMessage of the change we may need to apply if
 applicable. May return nil, that means that the update must not be applied (for
 example if the object has not changed).
 */
-func (m *Model) SyncObject(obj *ObjectInfo) (*UpdateMessage, error) {
+func (m *Model) SyncObject(obj *shared.ObjectInfo) (*shared.UpdateMessage, error) {
 	// we'll need the local path so create that up front
-	path := createPath(m.Root, obj.Path)
+	path := shared.CreatePath(m.Root, obj.Path)
 	// modfiy
 	_, exists := m.Tracked[path.FullPath()]
 	if exists {
@@ -150,7 +150,7 @@ func (m *Model) SyncObject(obj *ObjectInfo) (*UpdateMessage, error) {
 			return nil, errModelInconsitent
 		}
 		// sanity checks
-		if stin.Identification != obj.Identification || stin.Directory != obj.directory {
+		if stin.Identification != obj.Identification || stin.Directory != obj.Directory {
 			return nil, errMismatch
 		}
 		/*TODO what about directories?*/
@@ -159,13 +159,11 @@ func (m *Model) SyncObject(obj *ObjectInfo) (*UpdateMessage, error) {
 			log.Println("No update required!")
 			return nil, nil
 		}
-		return &UpdateMessage{
-			Type:      MsgUpdate,
-			Operation: OpModify,
-			Object:    *obj}, nil
+		um := shared.CreateUpdateMessage(shared.OpModify, *obj)
+		return &um, nil
 	}
 	log.Println("Create and delete not yet implemented!")
-	return nil, ErrUnsupported
+	return nil, shared.ErrUnsupported
 }
 
 /*
@@ -173,19 +171,19 @@ ApplyUpdateMessage takes an update message and applies it to the model. Should
 be called after the file operation has been applied but before the next update!
 */
 /*TODO catch shadow files*/
-func (m *Model) ApplyUpdateMessage(msg *UpdateMessage) error {
-	path := createPath(m.Root, msg.Object.Path)
+func (m *Model) ApplyUpdateMessage(msg *shared.UpdateMessage) error {
+	path := shared.CreatePath(m.Root, msg.Object.Path)
 	var err error
 	switch msg.Operation {
-	case OpCreate:
+	case shared.OpCreate:
 		err = m.applyCreate(path, &msg.Object)
-	case OpModify:
+	case shared.OpModify:
 		err = m.applyModify(path, &msg.Object)
-	case OpRemove:
+	case shared.OpRemove:
 		err = m.applyRemove(path, &msg.Object)
 	default:
 		log.Printf("Unknown operation in UpdateMessage: %s\n", msg.Operation)
-		return ErrUnsupported
+		return shared.ErrUnsupported
 	}
 	if err != nil {
 		return err
@@ -198,7 +196,7 @@ func (m *Model) ApplyUpdateMessage(msg *UpdateMessage) error {
 Register the channel over which UpdateMessage can be received. Tinzenite will
 only ever write to this channel, never read.
 */
-func (m *Model) Register(v chan UpdateMessage) {
+func (m *Model) Register(v chan shared.UpdateMessage) {
 	m.updatechan = v
 }
 
@@ -207,12 +205,12 @@ Read builds the complete Objectinfo representation of this model to its full
 depth. Incredibly fast because we only link objects based on the current state
 of the model: hashes etc are not recalculated.
 */
-func (m *Model) Read() (*ObjectInfo, error) {
-	var allObjs sortable
-	rpath := createPathRoot(m.Root)
+func (m *Model) Read() (*shared.ObjectInfo, error) {
+	var allObjs shared.Sortable
+	rpath := shared.CreatePathRoot(m.Root)
 	// getting all Objectinfos is very fast because the staticinfo already exists for all of them
 	for fullpath := range m.Tracked {
-		obj, err := m.getInfo(rpath.Apply(fullpath))
+		obj, err := m.GetInfo(rpath.Apply(fullpath))
 		if err != nil {
 			log.Println(err.Error())
 			continue
@@ -224,7 +222,7 @@ func (m *Model) Read() (*ObjectInfo, error) {
 	// build the tree!
 	root := allObjs[0]
 	/*build tree recursively*/
-	m.fillInfo(root, allObjs)
+	m.FillInfo(root, allObjs)
 	return root, nil
 }
 
@@ -232,46 +230,46 @@ func (m *Model) Read() (*ObjectInfo, error) {
 Store the model to disk in the correct directory.
 */
 func (m *Model) Store() error {
-	path := m.Root + "/" + TINZENITEDIR + "/" + LOCALDIR + "/" + MODELJSON
+	path := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.LOCALDIR + "/" + shared.MODELJSON
 	jsonBinary, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(path, jsonBinary, FILEPERMISSIONMODE)
+	return ioutil.WriteFile(path, jsonBinary, shared.FILEPERMISSIONMODE)
 }
 
 /*
 GetInfo creates the Objectinfo for the given path, so long as the path is
 contained in m.Tracked. Directories are NOT traversed!
 */
-func (m *Model) GetInfo(path *relativePath) (*ObjectInfo, error) {
+func (m *Model) GetInfo(path *shared.RelativePath) (*shared.ObjectInfo, error) {
 	_, exists := m.Tracked[path.FullPath()]
 	if !exists {
 		log.Printf("Error: %s\n", path.FullPath())
-		return nil, ErrUntracked
+		return nil, shared.ErrUntracked
 	}
 	// get staticinfo
 	stin, exists := m.Objinfo[path.FullPath()]
 	if !exists {
 		log.Printf("Error: %s\n", path.FullPath())
-		return nil, ErrUntracked
+		return nil, shared.ErrUntracked
 	}
 	stat, err := os.Lstat(path.FullPath())
 	if err != nil {
 		return nil, err
 	}
 	// build object
-	object := &ObjectInfo{
+	object := &shared.ObjectInfo{
 		Identification: stin.Identification,
 		Name:           path.LastElement(),
-		Path:           path.Subpath(),
+		Path:           path.SubPath(),
 		Shadow:         false,
 		Version:        stin.Version}
 	if stat.IsDir() {
-		object.directory = true
+		object.Directory = true
 		object.Content = ""
 	} else {
-		object.directory = false
+		object.Directory = false
 		object.Content = stin.Content
 	}
 	return object, nil
@@ -281,12 +279,12 @@ func (m *Model) GetInfo(path *relativePath) (*ObjectInfo, error) {
 FillInfo takes an Objectinfo and a list of candidates and recursively fills its
 Objects slice. If root is a file it simply returns root.
 */
-func (m *Model) FillInfo(root *ObjectInfo, all []*ObjectInfo) *ObjectInfo {
-	if !root.directory {
+func (m *Model) FillInfo(root *shared.ObjectInfo, all []*shared.ObjectInfo) *shared.ObjectInfo {
+	if !root.Directory {
 		// this may be an error, check later
 		return root
 	}
-	rpath := createPath(m.Root, root.Path)
+	rpath := shared.CreatePath(m.Root, root.Path)
 	for _, obj := range all {
 		if obj == root {
 			// skip self
@@ -303,7 +301,7 @@ func (m *Model) FillInfo(root *ObjectInfo, all []*ObjectInfo) *ObjectInfo {
 			continue
 		}
 		// if reached the object is in our subdir, so add and recursively fill
-		root.Objects = append(root.Objects, m.fillInfo(obj, all))
+		root.Objects = append(root.Objects, m.FillInfo(obj, all))
 	}
 	return root
 }
@@ -321,8 +319,8 @@ partialPopulateMap for the given path with all file and directory contents withi
 the given path, with the matcher applied if applicable.
 */
 func (m *Model) partialPopulateMap(path string) (map[string]bool, error) {
-	relPath := createPathRoot(m.Root).Apply(path)
-	master, err := createMatcher(relPath.Rootpath())
+	relPath := shared.CreatePathRoot(m.Root).Apply(path)
+	master, err := CreateMatcher(relPath.RootPath())
 	if err != nil {
 		return nil, err
 	}
@@ -352,14 +350,14 @@ applyCreate applies a create operation to the local model given that the file
 exists. NOTE: In the case of a file, requires the object to exist in the TEMPDIR
 named as the object indentification.
 */
-func (m *Model) applyCreate(path *relativePath, remoteObject *ObjectInfo) error {
+func (m *Model) applyCreate(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
 	// ensure no file has been written already
-	localCreate := fileExists(path.FullPath())
+	localCreate := shared.FileExists(path.FullPath())
 	// sanity check if the object already exists locally
 	_, ok := m.Tracked[path.FullPath()]
 	if ok {
 		log.Printf("Object at <%s> exists locally! Can not apply create!\n", path.FullPath())
-		return errConflict
+		return shared.ErrConflict
 	}
 	// NOTE: we don't explicitely check m.Objinfo because we'll just overwrite it if already exists
 	var stin *staticinfo
@@ -368,11 +366,11 @@ func (m *Model) applyCreate(path *relativePath, remoteObject *ObjectInfo) error 
 	if remoteObject != nil {
 		// create conflict
 		if localCreate {
-			return errConflict
+			return shared.ErrConflict
 		}
 		// dirs are made directly, files have to be moved from temp
-		if remoteObject.directory {
-			err := makeDirectory(path.FullPath())
+		if remoteObject.Directory {
+			err := shared.MakeDirectory(path.FullPath())
 			if err != nil {
 				return err
 			}
@@ -389,10 +387,10 @@ func (m *Model) applyCreate(path *relativePath, remoteObject *ObjectInfo) error 
 			return err
 		}
 		// apply external attributes
-		stin.ApplyObjectInfo(remoteObject)
+		stin.applyObjectInfo(remoteObject)
 	} else {
 		if !localCreate {
-			return errIllegalFileState
+			return shared.ErrIllegalFileState
 		}
 		// build staticinfo
 		stin, err = createStaticInfo(path.FullPath(), m.SelfID)
@@ -403,8 +401,8 @@ func (m *Model) applyCreate(path *relativePath, remoteObject *ObjectInfo) error 
 	// add obj to local model
 	m.Tracked[path.FullPath()] = true
 	m.Objinfo[path.FullPath()] = *stin
-	localObj, _ := m.getInfo(path)
-	m.notify(OpCreate, path, localObj)
+	localObj, _ := m.GetInfo(path)
+	m.notify(shared.OpCreate, path, localObj)
 	return nil
 }
 
@@ -414,16 +412,16 @@ Conflicts will result in deletion of the old file and two creations of both vers
 of the conflict. NOTE: In the case of a file, requires the object to exist in the
 TEMPDIR named as the object indentification.
 */
-func (m *Model) applyModify(path *relativePath, remoteObject *ObjectInfo) error {
+func (m *Model) applyModify(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
 	// ensure file has been written
-	if !fileExists(path.FullPath()) {
-		return errIllegalFileState
+	if !shared.FileExists(path.FullPath()) {
+		return shared.ErrIllegalFileState
 	}
 	// sanity check
 	_, ok := m.Tracked[path.FullPath()]
 	if !ok {
 		log.Println("Object doesn't exist locally!")
-		return errIllegalFileState
+		return shared.ErrIllegalFileState
 	}
 	// fetch stin
 	stin, ok := m.Objinfo[path.FullPath()]
@@ -438,19 +436,18 @@ func (m *Model) applyModify(path *relativePath, remoteObject *ObjectInfo) error 
 		// if remote change the local file may not have been modified
 		if localModified {
 			log.Println("Merge error! Untracked local changes!")
-			return errConflict
+			return shared.ErrConflict
 		}
 		// detect conflict
 		ver, ok := stin.Version.Valid(remoteObject.Version, m.SelfID)
 		if !ok {
 			log.Println("Merge error!")
-			/*TODO implement merge behavior in main.go*/
-			return errConflict
+			return shared.ErrConflict
 		}
 		// apply version update
 		stin.Version = ver
 		// if file apply file diff
-		if !remoteObject.directory {
+		if !remoteObject.Directory {
 			// apply the file op
 			err := m.applyFile(stin.Identification, path.FullPath())
 			if err != nil {
@@ -469,27 +466,27 @@ func (m *Model) applyModify(path *relativePath, remoteObject *ObjectInfo) error 
 		stin.Version.Increase(m.SelfID)
 	}
 	// update hash and modtime
-	err := stin.UpdateFromDisk(path.FullPath())
+	err := stin.updateFromDisk(path.FullPath())
 	if err != nil {
 		return err
 	}
 	// apply updated
 	m.Objinfo[path.FullPath()] = stin
-	localObj, _ := m.getInfo(path)
-	m.notify(OpModify, path, localObj)
+	localObj, _ := m.GetInfo(path)
+	m.notify(shared.OpModify, path, localObj)
 	return nil
 }
 
 /*
 applyRemove applies a remove operation.
 */
-func (m *Model) applyRemove(path *relativePath, remoteObject *ObjectInfo) error {
+func (m *Model) applyRemove(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
 	// check if local file has been removed
-	localRemove := !fileExists(path.FullPath())
-	var notifyObj *ObjectInfo
+	localRemove := !shared.FileExists(path.FullPath())
+	var notifyObj *shared.ObjectInfo
 	// remote removal
 	if remoteObject != nil {
-		removeExists := fileExists(m.Root + "/" + TINZENITEDIR + "/" + REMOVEDIR + "/" + remoteObject.Identification)
+		removeExists := shared.FileExists(m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR + "/" + remoteObject.Identification)
 		if removeExists {
 			log.Println("Creation of remove object overtook deletion: apply deletion and modify remove object.")
 		}
@@ -498,22 +495,22 @@ func (m *Model) applyRemove(path *relativePath, remoteObject *ObjectInfo) error 
 		if !localRemove {
 			/*TODO must check newly tinignore added files that remain on disk! --> not an error!*/
 			log.Println("Remove failed: file still exists!")
-			return errIllegalFileState
+			return shared.ErrIllegalFileState
 		}
 		// build a somewhat adequate object to send (important is only the ID anyway)
 		stin := m.Objinfo[path.FullPath()]
 		// just fill it with the info we have at hand
-		notifyObj = &ObjectInfo{
+		notifyObj = &shared.ObjectInfo{
 			Identification: stin.Identification,
 			Name:           path.LastElement(),
 			Content:        stin.Content,
 			Version:        stin.Version,
-			directory:      stin.Directory}
+			Directory:      stin.Directory}
 	}
 	/*TODO multiple peer logic*/
 	delete(m.Tracked, path.FullPath())
 	delete(m.Objinfo, path.FullPath())
-	m.notify(OpRemove, path, notifyObj)
+	m.notify(shared.OpRemove, path, notifyObj)
 	return nil
 }
 
@@ -540,7 +537,7 @@ func (m *Model) isModified(path string) bool {
 			return false
 		}
 	}
-	hash, err := contentHash(path)
+	hash, err := shared.ContentHash(path)
 	if err != nil {
 		log.Println(err.Error())
 		return false
@@ -558,7 +555,7 @@ applyFile from temp dir to correct path. Checks and executes the move.
 */
 func (m *Model) applyFile(identification string, path string) error {
 	// path to were the modified file sits before being applied
-	temppath := m.Root + "/" + TINZENITEDIR + "/" + TEMPDIR + "/" + identification
+	temppath := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.TEMPDIR + "/" + identification
 	// check that it exists
 	_, err := os.Lstat(temppath)
 	if err != nil {
@@ -571,7 +568,7 @@ func (m *Model) applyFile(identification string, path string) error {
 /*
 Notify the channel of the operation for the object at path.
 */
-func (m *Model) notify(op Operation, path *relativePath, obj *shared.ObjectInfo) {
+func (m *Model) notify(op shared.Operation, path *shared.RelativePath, obj *shared.ObjectInfo) {
 	log.Printf("%s: %s\n", op, path.LastElement())
 	if m.updatechan != nil {
 		if obj == nil {

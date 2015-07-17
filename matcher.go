@@ -4,12 +4,14 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
+
+	"github.com/tinzenite/shared"
 )
 
 /*
 Matcher is a helper object that checks paths against a .tinignore file.
 */
-type matcher struct {
+type Matcher struct {
 	root      string
 	dirRules  []string
 	fileRules []string
@@ -21,11 +23,11 @@ CreateMatcher creates a new matching object for fast checks against a .tinignore
 file. The root path is the directory where the .tinignore file is expected to lie
 in.
 */
-func createMatcher(rootPath string) (*matcher, error) {
-	var match matcher
+func CreateMatcher(rootPath string) (*Matcher, error) {
+	var match Matcher
 	match.root = rootPath
 	allRules, err := readTinIgnore(rootPath)
-	if err == ErrNoTinIgnore {
+	if err == shared.ErrNoTinIgnore {
 		// if empty we're done
 		return &match, nil
 	} else if err != nil {
@@ -52,7 +54,7 @@ func createMatcher(rootPath string) (*matcher, error) {
 Ignore checks whether the given path is to be ignored given the rules within the
 root .tinignore file.
 */
-func (m *matcher) Ignore(path string) bool {
+func (m *Matcher) Ignore(path string) bool {
 	// no need to check anything in this case
 	if m.IsEmpty() {
 		return false
@@ -85,14 +87,14 @@ func (m *matcher) Ignore(path string) bool {
 /*
 IsEmpty can be used to see if the matcher contains any rules at all.
 */
-func (m *matcher) IsEmpty() bool {
+func (m *Matcher) IsEmpty() bool {
 	return !m.used
 }
 
 /*
 Same returns true if the path is the path for this matcher.
 */
-func (m *matcher) Same(path string) bool {
+func (m *Matcher) Same(path string) bool {
 	return path == m.root
 }
 
@@ -100,11 +102,11 @@ func (m *matcher) Same(path string) bool {
 Resolve the matcher for the given path from the bottom up. If no matcher is found
 on any subpath, the original matcher is returned.
 */
-func (m *matcher) Resolve(path *relativePath) *matcher {
+func (m *Matcher) Resolve(path *shared.RelativePath) *Matcher {
 	for hasTinIgnore(path.FullPath()) != true {
 		path = path.Up()
 	}
-	matcher, err := createMatcher(path.FullPath())
+	matcher, err := CreateMatcher(path.FullPath())
 	if err != nil {
 		return m
 	}
@@ -114,7 +116,7 @@ func (m *matcher) Resolve(path *relativePath) *matcher {
 	return matcher
 }
 
-func (m *matcher) String() string {
+func (m *Matcher) String() string {
 	return "Matcher of <" + m.root + ">"
 }
 
@@ -123,11 +125,11 @@ ReadTinIgnore reads the .tinignore file in the given path if it exists. If not
 or some other error happens it returns ErrNoTinIgnore.
 */
 func readTinIgnore(path string) ([]string, error) {
-	data, err := ioutil.ReadFile(path + "/" + TINIGNORE)
+	data, err := ioutil.ReadFile(path + "/" + shared.TINIGNORE)
 	if err != nil {
-		// TODO is this correct? Can I be sure that I don't want to know what
-		//	    other errors may happen here?
-		return nil, ErrNoTinIgnore
+		/* TODO is this correct? Can I be sure that I don't want to know what
+		   other errors may happen here? */
+		return nil, shared.ErrNoTinIgnore
 	}
 	// sanitize (remove empty lines)
 	list := strings.Split(string(data), "\n")
@@ -150,6 +152,6 @@ func readTinIgnore(path string) ([]string, error) {
 hasTinIgnore checks whether the path has a .tinignore file.
 */
 func hasTinIgnore(path string) bool {
-	_, err := ioutil.ReadFile(path + "/" + TINIGNORE)
+	_, err := ioutil.ReadFile(path + "/" + shared.TINIGNORE)
 	return err == nil
 }

@@ -27,7 +27,7 @@ accordingly.
 */
 func createStaticInfo(path, selfpeerid string) (*staticinfo, error) {
 	// fetch all values we'll need to store
-	id, err := newIdentifier()
+	id, err := shared.NewIdentifier()
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +37,7 @@ func createStaticInfo(path, selfpeerid string) (*staticinfo, error) {
 	}
 	hash := ""
 	if !stat.IsDir() {
-		hash, err = contentHash(path)
+		hash, err = shared.ContentHash(path)
 		if err != nil {
 			return nil, err
 		}
@@ -55,7 +55,7 @@ UpdateFromDisk updates the hash and modtime to match the file on disk.
 */
 func (s *staticinfo) updateFromDisk(path string) error {
 	if !s.Directory {
-		hash, err := contentHash(path)
+		hash, err := shared.ContentHash(path)
 		if err != nil {
 			return err
 		}
@@ -72,10 +72,10 @@ func (s *staticinfo) updateFromDisk(path string) error {
 /*
 ApplyObjectInfo to staticinfo object.
 */
-func (s *staticinfo) applyObjectInfo(obj *ObjectInfo) {
+func (s *staticinfo) applyObjectInfo(obj *shared.ObjectInfo) {
 	s.Identification = obj.Identification
 	s.Version = obj.Version
-	s.Directory = obj.directory
+	s.Directory = obj.Directory
 	s.Content = obj.Content
 }
 
