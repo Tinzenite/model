@@ -93,7 +93,7 @@ func (m *Model) PartialUpdate(scope string) error {
 		if ok {
 			// paths that still exist must only be checked for MODIFY
 			delete(current, path)
-			m.applyModify(relPath.Apply(path), nil)
+			m.ApplyModify(relPath.Apply(path), nil)
 		} else {
 			// REMOVED - paths that don't exist anymore have been removed
 			removed = append(removed, path)
@@ -109,11 +109,11 @@ func (m *Model) PartialUpdate(scope string) error {
 	}
 	// update m.Tracked
 	for _, path := range removed {
-		m.applyRemove(relPath.Apply(path), nil)
+		m.ApplyRemove(relPath.Apply(path), nil)
 	}
 	for _, path := range created {
 		// nil for version because new local object
-		m.applyCreate(relPath.Apply(path), nil)
+		m.ApplyCreate(relPath.Apply(path), nil)
 	}
 	// finally also store the model for future loads.
 	return m.Store()
@@ -176,11 +176,11 @@ func (m *Model) ApplyUpdateMessage(msg *shared.UpdateMessage) error {
 	var err error
 	switch msg.Operation {
 	case shared.OpCreate:
-		err = m.applyCreate(path, &msg.Object)
+		err = m.ApplyCreate(path, &msg.Object)
 	case shared.OpModify:
-		err = m.applyModify(path, &msg.Object)
+		err = m.ApplyModify(path, &msg.Object)
 	case shared.OpRemove:
-		err = m.applyRemove(path, &msg.Object)
+		err = m.ApplyRemove(path, &msg.Object)
 	default:
 		log.Printf("Unknown operation in UpdateMessage: %s\n", msg.Operation)
 		return shared.ErrUnsupported
@@ -346,11 +346,11 @@ func (m *Model) partialPopulateMap(path string) (map[string]bool, error) {
 }
 
 /*
-applyCreate applies a create operation to the local model given that the file
+ApplyCreate applies a create operation to the local model given that the file
 exists. NOTE: In the case of a file, requires the object to exist in the TEMPDIR
 named as the object indentification.
 */
-func (m *Model) applyCreate(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
+func (m *Model) ApplyCreate(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
 	// ensure no file has been written already
 	localCreate := shared.FileExists(path.FullPath())
 	// sanity check if the object already exists locally
@@ -407,12 +407,12 @@ func (m *Model) applyCreate(path *shared.RelativePath, remoteObject *shared.Obje
 }
 
 /*
-applyModify checks for modifications and if valid applies them to the local model.
+ApplyModify checks for modifications and if valid applies them to the local model.
 Conflicts will result in deletion of the old file and two creations of both versions
 of the conflict. NOTE: In the case of a file, requires the object to exist in the
 TEMPDIR named as the object indentification.
 */
-func (m *Model) applyModify(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
+func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
 	// ensure file has been written
 	if !shared.FileExists(path.FullPath()) {
 		return shared.ErrIllegalFileState
@@ -478,9 +478,9 @@ func (m *Model) applyModify(path *shared.RelativePath, remoteObject *shared.Obje
 }
 
 /*
-applyRemove applies a remove operation.
+ApplyRemove applies a remove operation.
 */
-func (m *Model) applyRemove(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
+func (m *Model) ApplyRemove(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
 	// check if local file has been removed
 	localRemove := !shared.FileExists(path.FullPath())
 	var notifyObj *shared.ObjectInfo
