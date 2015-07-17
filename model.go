@@ -78,13 +78,13 @@ func (m *Model) PartialUpdate(scope string) error {
 		return shared.ErrNilInternalState
 	}
 	current, err := m.populateMap()
-	var removed, created []string
 	if err != nil {
 		return err
 	}
 	// we'll need this for every create* op, so create only once:
 	relPath := shared.CreatePathRoot(m.Root)
 	// now: compare old tracked with new version
+	var removed, created []string
 	for path := range m.TrackedPaths {
 		// ignore if not in partial update path
 		if !strings.HasPrefix(path, scope) {

@@ -103,7 +103,8 @@ Resolve the matcher for the given path from the bottom up. If no matcher is foun
 on any subpath, the original matcher is returned.
 */
 func (m *Matcher) Resolve(path *shared.RelativePath) *Matcher {
-	for hasTinIgnore(path.FullPath()) != true {
+	// !path.AtRoot ensures that we stop if we reach the root path
+	for hasTinIgnore(path.FullPath()) != true && !path.AtRoot() {
 		path = path.Up()
 	}
 	matcher, err := CreateMatcher(path.FullPath())
