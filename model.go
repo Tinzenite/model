@@ -85,36 +85,36 @@ func (m *Model) PartialUpdate(scope string) error {
 	relPath := shared.CreatePathRoot(m.Root)
 	// now: compare old tracked with new version
 	var removed, created []string
-	for path := range m.TrackedPaths {
+	for subpath := range m.TrackedPaths {
 		// ignore if not in partial update path
-		if !strings.HasPrefix(path, scope) {
+		if !strings.HasPrefix(m.Root+"/"+subpath, scope) {
 			continue
 		}
-		_, ok := current[path]
+		_, ok := current[subpath]
 		if ok {
 			// paths that still exist must only be checked for MODIFY
-			delete(current, path)
-			m.ApplyModify(relPath.Apply(path), nil)
+			delete(current, subpath)
+			m.ApplyModify(relPath.Apply(subpath), nil)
 		} else {
 			// REMOVED - paths that don't exist anymore have been removed
-			removed = append(removed, path)
+			removed = append(removed, subpath)
 		}
 	}
 	// CREATED - any remaining paths are yet untracked in m.tracked
-	for path := range current {
+	for subpath := range current {
 		// ignore if not in partial update path
-		if !strings.HasPrefix(path, scope) {
+		if !strings.HasPrefix(m.Root+"/"+subpath, scope) {
 			continue
 		}
-		created = append(created, path)
+		created = append(created, subpath)
 	}
 	// update m.Tracked
-	for _, path := range removed {
-		m.ApplyRemove(relPath.Apply(path), nil)
+	for _, subpath := range removed {
+		m.ApplyRemove(relPath.Apply(subpath), nil)
 	}
-	for _, path := range created {
+	for _, subpath := range created {
 		// nil for version because new local object
-		m.ApplyCreate(relPath.Apply(path), nil)
+		m.ApplyCreate(relPath.Apply(subpath), nil)
 	}
 	// finally also store the model for future loads.
 	return m.Store()
@@ -143,10 +143,10 @@ func (m *Model) SyncObject(obj *shared.ObjectInfo) (*shared.UpdateMessage, error
 	// we'll need the local path so create that up front
 	path := shared.CreatePath(m.Root, obj.Path)
 	// modfiy
-	_, exists := m.TrackedPaths[path.FullPath()]
+	_, exists := m.TrackedPaths[path.SubPath()]
 	if exists {
 		// get staticinfo
-		stin, ok := m.StaticInfos[path.FullPath()]
+		stin, ok := m.StaticInfos[path.SubPath()]
 		if !ok {
 			return nil, errModelInconsitent
 		}
@@ -256,13 +256,13 @@ GetInfo creates the Objectinfo for the given path, so long as the path is
 contained in m.Tracked. Directories are NOT traversed!
 */
 func (m *Model) GetInfo(path *shared.RelativePath) (*shared.ObjectInfo, error) {
-	_, exists := m.TrackedPaths[path.FullPath()]
+	_, exists := m.TrackedPaths[path.SubPath()]
 	if !exists {
 		log.Printf("Error: %s\n", path.FullPath())
 		return nil, shared.ErrUntracked
 	}
 	// get staticinfo
-	stin, exists := m.StaticInfos[path.FullPath()]
+	stin, exists := m.StaticInfos[path.SubPath()]
 	if !exists {
 		log.Printf("Error: %s\n", path.FullPath())
 		return nil, shared.ErrUntracked
@@ -328,7 +328,7 @@ func (m *Model) ApplyCreate(path *shared.RelativePath, remoteObject *shared.Obje
 	// ensure no file has been written already
 	localCreate := shared.FileExists(path.FullPath())
 	// sanity check if the object already exists locally
-	_, ok := m.TrackedPaths[path.FullPath()]
+	_, ok := m.TrackedPaths[path.SubPath()]
 	if ok {
 		log.Printf("Object at <%s> exists locally! Can not apply create!\n", path.FullPath())
 		return shared.ErrConflict
@@ -373,8 +373,8 @@ func (m *Model) ApplyCreate(path *shared.RelativePath, remoteObject *shared.Obje
 		}
 	}
 	// add obj to local model
-	m.TrackedPaths[path.FullPath()] = true
-	m.StaticInfos[path.FullPath()] = *stin
+	m.TrackedPaths[path.SubPath()] = true
+	m.StaticInfos[path.SubPath()] = *stin
 	localObj, _ := m.GetInfo(path)
 	m.notify(shared.OpCreate, path, localObj)
 	return nil
@@ -392,18 +392,18 @@ func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.Obje
 		return shared.ErrIllegalFileState
 	}
 	// sanity check
-	_, ok := m.TrackedPaths[path.FullPath()]
+	_, ok := m.TrackedPaths[path.SubPath()]
 	if !ok {
 		log.Println("Object doesn't exist locally!")
 		return shared.ErrIllegalFileState
 	}
 	// fetch stin
-	stin, ok := m.StaticInfos[path.FullPath()]
+	stin, ok := m.StaticInfos[path.SubPath()]
 	if !ok {
 		return errModelInconsitent
 	}
 	// flag whether the local file has been modified
-	localModified := m.isModified(path.FullPath())
+	localModified := m.isModified(path)
 	// check for remote modifications
 	if remoteObject != nil {
 		/*TODO implement conflict behaviour!*/
@@ -445,7 +445,7 @@ func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.Obje
 		return err
 	}
 	// apply updated
-	m.StaticInfos[path.FullPath()] = stin
+	m.StaticInfos[path.SubPath()] = stin
 	localObj, _ := m.GetInfo(path)
 	m.notify(shared.OpModify, path, localObj)
 	return nil
@@ -482,8 +482,8 @@ func (m *Model) ApplyRemove(path *shared.RelativePath, remoteObject *shared.Obje
 			Directory:      stin.Directory}
 	}
 	/*TODO multiple peer logic*/
-	delete(m.TrackedPaths, path.FullPath())
-	delete(m.StaticInfos, path.FullPath())
+	delete(m.TrackedPaths, path.SubPath())
+	delete(m.StaticInfos, path.SubPath())
 	m.notify(shared.OpRemove, path, notifyObj)
 	return nil
 }
@@ -491,10 +491,10 @@ func (m *Model) ApplyRemove(path *shared.RelativePath, remoteObject *shared.Obje
 /*
 isModified checks whether a file has been modified.
 */
-func (m *Model) isModified(path string) bool {
-	stin, ok := m.StaticInfos[path]
+func (m *Model) isModified(path *shared.RelativePath) bool {
+	stin, ok := m.StaticInfos[path.SubPath()]
 	if !ok {
-		log.Println("staticinfo lookup failed!")
+		log.Println("Staticinfo lookup failed for", path.SubPath(), "!")
 		return false
 	}
 	// no need for further work here
@@ -502,7 +502,7 @@ func (m *Model) isModified(path string) bool {
 		return false
 	}
 	// if modtime still the same no need to hash again
-	stat, err := os.Lstat(path)
+	stat, err := os.Lstat(path.FullPath())
 	if err != nil {
 		log.Println(err.Error())
 		// Note that we don't return here because we can still continue without this check
@@ -511,7 +511,7 @@ func (m *Model) isModified(path string) bool {
 			return false
 		}
 	}
-	hash, err := shared.ContentHash(path)
+	hash, err := shared.ContentHash(path.FullPath())
 	if err != nil {
 		log.Println(err.Error())
 		return false
@@ -565,26 +565,33 @@ func (m *Model) populateMap() (map[string]bool, error) {
 partialPopulateMap for the given path with all file and directory contents within
 the given path, with the matcher applied if applicable.
 */
-func (m *Model) partialPopulateMap(path string) (map[string]bool, error) {
-	relPath := shared.CreatePathRoot(m.Root).Apply(path)
+func (m *Model) partialPopulateMap(rootPath string) (map[string]bool, error) {
+	relPath := shared.CreatePathRoot(m.Root).Apply(rootPath)
 	master, err := CreateMatcher(relPath.RootPath())
 	if err != nil {
 		return nil, err
 	}
 	tracked := make(map[string]bool)
 	filepath.Walk(relPath.FullPath(), func(subpath string, stat os.FileInfo, inerr error) error {
+		// sanity check
+		thisPath := relPath.Apply(subpath)
+		if thisPath.FullPath() != subpath {
+			log.Println("Failed to walk due to wrong path!", thisPath.FullPath())
+			return nil
+		}
 		// resolve matcher
 		/*FIXME thie needlessly creates a lot of potential duplicates*/
-		match := master.Resolve(relPath.Apply(subpath))
+		match := master.Resolve(thisPath)
 		// ignore on match
-		if match.Ignore(subpath) {
+		if match.Ignore(thisPath.FullPath()) {
 			// SkipDir is okay even if file
 			if stat.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		tracked[subpath] = true
+		// tracked contains path beneath root, so use SubPath as key
+		tracked[thisPath.SubPath()] = true
 		return nil
 	})
 	// doesn't directly assign to m.tracked on purpose so that we can reuse this
