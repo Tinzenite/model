@@ -254,6 +254,17 @@ func (m *Model) FilePath(identification string) (string, error) {
 }
 
 /*
+GetIdentification returns the ID of an object at the given path.
+*/
+func (m *Model) GetIdentification(path *shared.RelativePath) (string, error) {
+	stin, ok := m.StaticInfos[path.SubPath()]
+	if !ok {
+		return "", shared.ErrUntracked
+	}
+	return stin.Identification, nil
+}
+
+/*
 GetInfo creates the Objectinfo for the given path, so long as the path is
 contained in m.Tracked. Directories are NOT traversed!
 */
