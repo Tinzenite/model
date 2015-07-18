@@ -69,9 +69,11 @@ func (m *Model) Update() error {
 }
 
 /*
-PartialUpdate of the model state.
+PartialUpdate of the model state. Scope is the the FULL path of the scope in
+absolute terms!
 
 TODO Get concurrency to work here. Last time I had trouble with the Objinfo map.
+TODO Make scope a RelativePath?
 */
 func (m *Model) PartialUpdate(scope string) error {
 	if m.TrackedPaths == nil || m.StaticInfos == nil {
@@ -86,8 +88,8 @@ func (m *Model) PartialUpdate(scope string) error {
 	// now: compare old tracked with new version
 	var removed, created []string
 	for subpath := range m.TrackedPaths {
-		// ignore if not in partial update path
-		if !strings.HasPrefix(m.Root+"/"+subpath, scope) {
+		// ignore if not in partial update path AND not part of path to scope
+		if !strings.HasPrefix(m.Root+"/"+subpath, scope) && !strings.Contains(scope, m.Root+"/"+subpath) {
 			continue
 		}
 		_, ok := current[subpath]
@@ -102,8 +104,8 @@ func (m *Model) PartialUpdate(scope string) error {
 	}
 	// CREATED - any remaining paths are yet untracked in m.tracked
 	for subpath := range current {
-		// ignore if not in partial update path
-		if !strings.HasPrefix(m.Root+"/"+subpath, scope) {
+		// ignore if not in partial update path AND not part of path to scope
+		if !strings.HasPrefix(m.Root+"/"+subpath, scope) && !strings.Contains(scope, m.Root+"/"+subpath) {
 			continue
 		}
 		created = append(created, subpath)
