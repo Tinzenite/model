@@ -250,7 +250,7 @@ func (m *Model) FilePath(identification string) (string, error) {
 			return m.Root + "/" + path, nil
 		}
 	}
-	return "", errors.New("corresponding file for id not found")
+	return "", errors.New("corresponding file for id <" + identification + "> not found")
 }
 
 /*
@@ -323,7 +323,6 @@ func (m *Model) FillInfo(root *shared.ObjectInfo, all []*shared.ObjectInfo) *sha
 		}
 		if !strings.Contains(path.FullPath(), rpath.FullPath()) {
 			// not in my directory
-			log.Println("Not in mine!") // leave this line until you figure out why it never runs into this...
 			continue
 		}
 		// if reached the object is in our subdir, so add and recursively fill
@@ -466,18 +465,28 @@ func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.Obje
 
 /*
 ApplyRemove applies a remove operation.
+
+TODO implement me next! First correctly for local changes, then for external!
 */
 func (m *Model) ApplyRemove(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
+	/*TODO maybe rewrite it completely... :P */
+	log.Println("REMOVING") // test if we actually trigger this
+	// get static info of local file
+	stin := m.StaticInfos[path.FullPath()]
+	// path of deletion object (if it already exists, otherwise we create it)
+	delPath := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR + "/" + stin.Identification
 	// check if local file has been removed
 	localRemove := !shared.FileExists(path.FullPath())
 	var notifyObj *shared.ObjectInfo
 	// remote removal
 	if remoteObject != nil {
-		removeExists := shared.FileExists(m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR + "/" + remoteObject.Identification)
+		removeExists := shared.FileExists(delPath)
 		if removeExists {
 			log.Println("Creation of remove object overtook deletion: apply deletion and modify remove object.")
 		}
-		notifyObj = remoteObject
+		log.Println("Remove local object and modify remove object!")
+		/*FIXME: this causes instant contious updates*/
+		// notifyObj = remoteObject
 	} else {
 		if !localRemove {
 			/*TODO must check newly tinignore added files that remain on disk! --> not an error!*/
@@ -485,8 +494,6 @@ func (m *Model) ApplyRemove(path *shared.RelativePath, remoteObject *shared.Obje
 			return shared.ErrIllegalFileState
 		}
 		// build a somewhat adequate object to send (important is only the ID anyway)
-		stin := m.StaticInfos[path.FullPath()]
-		// just fill it with the info we have at hand
 		notifyObj = &shared.ObjectInfo{
 			Identification: stin.Identification,
 			Name:           path.LastElement(),
@@ -495,6 +502,15 @@ func (m *Model) ApplyRemove(path *shared.RelativePath, remoteObject *shared.Obje
 			Directory:      stin.Directory}
 	}
 	/*TODO multiple peer logic*/
+	// write removal file
+	file, err := os.OpenFile(delPath, shared.FILEFLAGCREATEAPPEND, shared.FILEPERMISSIONMODE)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	// add self to having received the deletion
+	file.WriteString(m.SelfID + "\n")
+	/*TODO fix below. Must also create / modify update of remove file*/
 	delete(m.TrackedPaths, path.SubPath())
 	delete(m.StaticInfos, path.SubPath())
 	m.notify(shared.OpRemove, path, notifyObj)

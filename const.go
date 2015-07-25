@@ -7,3 +7,5 @@ var (
 	errModelInconsitent  = errors.New("model tracked and staticinfo are inconsistent")
 	errMissingUpdateFile = errors.New("file for update missing from temp")
 )
+
+var tag = "Model:"
