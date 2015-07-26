@@ -530,7 +530,11 @@ func (m *Model) checkRemove() error {
 			}
 		}
 		if complete {
-			log.Println("Yup, can remove completely!")
+			err := m.directRemove(shared.CreatePathRoot(m.Root).Apply(objRemovePath))
+			if err != nil {
+				log.Println("Failed to direct remove!")
+				return err
+			}
 		}
 	}
 	return nil
@@ -545,10 +549,12 @@ func (m *Model) localRemove(path *shared.RelativePath) error {
 	// get stin for notify
 	stin := m.StaticInfos[path.SubPath()]
 	// remove from model
-	delete(m.TrackedPaths, path.SubPath())
-	delete(m.StaticInfos, path.SubPath())
+	err := m.directRemove(path)
+	if err != nil {
+		return err
+	}
 	// make directories
-	err := shared.MakeDirectories(removeDirectory+"/"+stin.Identification, shared.REMOVECHECKDIR, shared.REMOVEDONEDIR)
+	err = shared.MakeDirectories(removeDirectory+"/"+stin.Identification, shared.REMOVECHECKDIR, shared.REMOVEDONEDIR)
 	if err != nil {
 		log.Println("Making dir error")
 		return err
@@ -586,6 +592,36 @@ func (m *Model) localRemove(path *shared.RelativePath) error {
 		Version:        stin.Version,
 		Directory:      stin.Directory}
 	m.notify(shared.OpRemove, path, notifyObj)
+	return nil
+}
+
+/*
+directRemove removes the given path from the model immediately without notifying
+the update. NOTE: Do not use unless this is the behaviour you want! This method
+is specifically a part of the normal applyRemove method, do not call outside
+of it!
+*/
+func (m *Model) directRemove(path *shared.RelativePath) error {
+	objList, err := m.partialPopulateMap(path.FullPath())
+	if err != nil {
+		log.Println("partialPopulateMap failed in directRemove")
+		return err
+	}
+	// iterate over each path
+	for obj := range objList {
+		relPath := path.Apply(obj)
+		// if it still exists --> remove
+		if shared.FileExists(relPath.FullPath()) {
+			err := os.RemoveAll(relPath.FullPath())
+			if err != nil {
+				log.Println("directRemove failed to remove the file itself!")
+				return err
+			}
+		}
+		// remove from model
+		delete(m.TrackedPaths, relPath.SubPath())
+		delete(m.StaticInfos, relPath.SubPath())
+	}
 	return nil
 }
 
