@@ -470,13 +470,10 @@ func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.Obje
 
 /*
 ApplyRemove applies a remove operation.
-
-TODO implement me next! First correctly for local changes, then for external!
 */
 func (m *Model) ApplyRemove(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
 	remoteRemove := remoteObject != nil
 	localFileExists := shared.FileExists(path.FullPath())
-	log.Println("Remote?", remoteRemove, ": Local exists?", localFileExists)
 	// if locally initiated, just apply
 	if !remoteRemove {
 		// if not a remote remove the deletion must be applied locally
@@ -497,8 +494,7 @@ func (m *Model) ApplyRemove(path *shared.RelativePath, remoteObject *shared.Obje
 			return err
 		}
 	}
-	// if we get a removal from another peer has that peer seen the deletion?
-	/*TODO write peer file for this case... notify?*/
+	// if we get a removal from another peer that peer seen the deletion, but we'll be notified by the create method, so nothing to do here
 	return nil
 }
 
