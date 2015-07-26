@@ -118,6 +118,11 @@ func (m *Model) PartialUpdate(scope string) error {
 		// nil for version because new local object
 		m.ApplyCreate(relPath.Apply(subpath), nil)
 	}
+	// ensure that removes are handled
+	err = m.checkRemove()
+	if err != nil {
+		return err
+	}
 	// finally also store the model for future loads.
 	return m.Store()
 }
@@ -469,50 +474,117 @@ ApplyRemove applies a remove operation.
 TODO implement me next! First correctly for local changes, then for external!
 */
 func (m *Model) ApplyRemove(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
-	/*TODO maybe rewrite it completely... :P */
-	log.Println("REMOVING") // test if we actually trigger this
-	// get static info of local file
-	stin := m.StaticInfos[path.FullPath()]
-	// path of deletion object (if it already exists, otherwise we create it)
-	delPath := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR + "/" + stin.Identification
-	// check if local file has been removed
-	localRemove := !shared.FileExists(path.FullPath())
-	var notifyObj *shared.ObjectInfo
-	// remote removal
-	if remoteObject != nil {
-		removeExists := shared.FileExists(delPath)
-		if removeExists {
-			log.Println("Creation of remove object overtook deletion: apply deletion and modify remove object.")
-		}
-		log.Println("Remove local object and modify remove object!")
-		/*FIXME: this causes instant contious updates*/
-		// notifyObj = remoteObject
-	} else {
-		if !localRemove {
-			/*TODO must check newly tinignore added files that remain on disk! --> not an error!*/
-			log.Println("Remove failed: file still exists!")
-			return shared.ErrIllegalFileState
-		}
-		// build a somewhat adequate object to send (important is only the ID anyway)
-		notifyObj = &shared.ObjectInfo{
-			Identification: stin.Identification,
-			Name:           path.LastElement(),
-			Content:        stin.Content,
-			Version:        stin.Version,
-			Directory:      stin.Directory}
+	remoteRemove := remoteObject != nil
+	localFileExists := shared.FileExists(path.FullPath())
+	log.Println("Remote?", remoteRemove, ": Local exists?", localFileExists)
+	// if locally initiated, just apply
+	if !remoteRemove {
+		// if not a remote remove the deletion must be applied locally
+		return m.localRemove(path)
 	}
-	/*TODO multiple peer logic*/
-	// write removal file
-	file, err := os.OpenFile(delPath, shared.FILEFLAGCREATEAPPEND, shared.FILEPERMISSIONMODE)
+	// local remove
+	if localFileExists {
+		// remove file
+		err := os.Remove(path.FullPath())
+		if err != nil {
+			log.Println("Couldn't remove file")
+			return err
+		}
+		// apply local deletion
+		err = m.localRemove(path)
+		if err != nil {
+			log.Println("local remove didn't work")
+			return err
+		}
+	}
+	// if we get a removal from another peer has that peer seen the deletion?
+	/*TODO write peer file for this case... notify?*/
+	return nil
+}
+
+/*
+checkRemove checks whether a remove can be finally applied and purged from the
+model dependent on the peers in done and check.
+*/
+func (m *Model) checkRemove() error {
+	removeDir := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR
+	allRemovals, err := ioutil.ReadDir(removeDir)
 	if err != nil {
+		log.Println("reading all removals failed")
 		return err
 	}
-	defer file.Close()
-	// add self to having received the deletion
-	file.WriteString(m.SelfID + "\n")
-	/*TODO fix below. Must also create / modify update of remove file*/
+	// check for each removal
+	for _, stat := range allRemovals {
+		objRemovePath := removeDir + "/" + stat.Name()
+		allCheck, err := ioutil.ReadDir(objRemovePath + "/" + shared.REMOVECHECKDIR)
+		if err != nil {
+			log.Println("Failed reading check peer list!")
+			return err
+		}
+		// test whether we can remove it
+		complete := true
+		for _, peerStat := range allCheck {
+			if !shared.FileExists(objRemovePath + "/" + shared.REMOVEDONEDIR + "/" + peerStat.Name()) {
+				complete = false
+				break
+			}
+		}
+		if complete {
+			log.Println("Yup, can remove completely!")
+		}
+	}
+	return nil
+}
+
+/*
+localRemove initiates a deletion locally, creating all necessary files and
+removing the file from the model.
+*/
+func (m *Model) localRemove(path *shared.RelativePath) error {
+	removeDirectory := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR
+	// get stin for notify
+	stin := m.StaticInfos[path.SubPath()]
+	// remove from model
 	delete(m.TrackedPaths, path.SubPath())
 	delete(m.StaticInfos, path.SubPath())
+	// make directories
+	err := shared.MakeDirectories(removeDirectory+"/"+stin.Identification, shared.REMOVECHECKDIR, shared.REMOVEDONEDIR)
+	if err != nil {
+		log.Println("Making dir error")
+		return err
+	}
+	// write peer list to check which must all be notified of removal
+	peers, err := m.readPeers()
+	if err != nil {
+		log.Println("Failed to read peers")
+		return err
+	}
+	for _, peer := range peers {
+		err = ioutil.WriteFile(removeDirectory+"/"+stin.Identification+"/"+shared.REMOVECHECKDIR+"/"+peer, []byte(""), shared.FILEPERMISSIONMODE)
+		if err != nil {
+			log.Println("Couldn't write peer file", peer, "to check!")
+			return err
+		}
+	}
+	// write own peer file also to done dir
+	err = ioutil.WriteFile(removeDirectory+"/"+stin.Identification+"/"+shared.REMOVEDONEDIR+"/"+m.SelfID, []byte(""), shared.FILEPERMISSIONMODE)
+	if err != nil {
+		log.Println("Couldn't write own peer file to done!")
+		return err
+	}
+	// make sure deletion is caught
+	err = m.PartialUpdate(removeDirectory) /*TODO can this cause recursion? CHECK!*/
+	if err != nil {
+		log.Println("Error partial updating!")
+		return err
+	}
+	// send notify
+	notifyObj := &shared.ObjectInfo{
+		Identification: stin.Identification,
+		Name:           path.LastElement(),
+		Content:        stin.Content,
+		Version:        stin.Version,
+		Directory:      stin.Directory}
 	m.notify(shared.OpRemove, path, notifyObj)
 	return nil
 }
@@ -626,4 +698,20 @@ func (m *Model) partialPopulateMap(rootPath string) (map[string]bool, error) {
 	// doesn't directly assign to m.tracked on purpose so that we can reuse this
 	// method elsewhere (for the current structure on m.Update())
 	return tracked, nil
+}
+
+/*
+readPeers reads all the peers from the .tinzenite directory and returns a list
+of their IDs.
+*/
+func (m *Model) readPeers() ([]string, error) {
+	var IDs []string
+	peers, err := shared.LoadPeers(m.Root)
+	if err != nil {
+		return nil, err
+	}
+	for _, peer := range peers {
+		IDs = append(IDs, peer.Identification)
+	}
+	return IDs, nil
 }
