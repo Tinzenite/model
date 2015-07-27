@@ -128,16 +128,26 @@ func (m *Model) PartialUpdate(scope string) error {
 }
 
 /*
-SyncModel TODO
+SyncModel takes the root ObjectInfo of the foreign model and returns an amount of
+UpdateMessages required to update the current model to the foreign model. These
+must still be applied!
 */
 func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, error) {
-	/*
-		TODO: how to implement this.
-		Maybe: make a check method that simply returns whether Tinzenite needs to
-		fetch the file? Can then use ApplyUpdateMessage to trigger actual update...
-
-		Will also need to work on how TINZENITE fetches the files (from multiple etc.)
-	*/
+	// simply case: simply take over foreign model
+	if m.IsEmpty() {
+		log.Println("I'M EMPTY; TAKE OVER FOREIGN MODEL COMPLETELY!")
+		var umList []*shared.UpdateMessage
+		root.ForEach(func(obj shared.ObjectInfo) {
+			// remove subobjects for message
+			obj.Objects = nil
+			// create update message
+			um := shared.CreateUpdateMessage(shared.OpCreate, obj)
+			/*TODO if I can use channel instead this can be go-ed*/
+			umList = append(umList, &um)
+		})
+		return umList, nil
+	}
+	log.Println("TODO: NOT SUPPORTED FOR NON EMPTY MODEL YET")
 	return nil, shared.ErrUnsupported
 }
 
@@ -496,6 +506,20 @@ func (m *Model) ApplyRemove(path *shared.RelativePath, remoteObject *shared.Obje
 	}
 	// if we get a removal from another peer that peer seen the deletion, but we'll be notified by the create method, so nothing to do here
 	return nil
+}
+
+/*
+IsEmpty returns true if the model is empty SAVE for the .tinzenite files.
+*/
+func (m *Model) IsEmpty() bool {
+	// we could do some cool stuff on m.Tracked etc, but...
+	count, err := shared.CountFiles(m.Root)
+	if err != nil {
+		log.Println("IsEmpty:", err)
+		return false
+	}
+	// ...just check whether root contains one dir and it is the TINZENITEDIR
+	return count == 1 && shared.FileExists(m.Root+"/"+shared.TINZENITEDIR)
 }
 
 /*
