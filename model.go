@@ -112,16 +112,51 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 	}
 	// a bit more complex: must check all so start by generating map of paths
 	foreignPaths := make(map[string]bool)
+	foreignObjs := make(map[string]*shared.ObjectInfo)
 	root.ForEach(func(obj shared.ObjectInfo) {
 		foreignPaths[obj.Path] = true
+		obj.Objects = nil
+		foreignObjs[obj.Path] = &obj
 	})
 	// compare to local version
 	created, modified, removed := m.compareMaps(m.Root, foreignPaths)
-	log.Println("Created:", len(created), "Modified:", len(modified), "Removed:", len(removed))
-	/*TODO need to check the modified if they really have been modified... BEFORE UM!
-	OR does applymodify already do something smart? Don't think so...*/
-	log.Println("TODO: GENERATE UPDATEMSG FROM LISTS")
-	return nil, shared.ErrUnsupported
+	// build update messages
+	var umList []*shared.UpdateMessage
+	for _, subpath := range created {
+		remObj := foreignObjs[subpath]
+		um := shared.CreateUpdateMessage(shared.OpCreate, *remObj)
+		umList = append(umList, &um)
+		log.Println("Remote Create", subpath)
+	}
+	for _, subpath := range modified {
+		localObj, err := m.GetInfo(shared.CreatePath(m.Root, subpath))
+		if err != nil {
+			log.Println("SyncModel: failed to fetch local obj for modify check!")
+			continue
+		}
+		remObj := foreignObjs[subpath]
+		// check if same – if not some modify has happened
+		if !localObj.Equal(remObj) {
+			um := shared.CreateUpdateMessage(shared.OpModify, *remObj)
+			umList = append(umList, &um)
+			log.Println("Remote Modify", subpath)
+		}
+	}
+	for _, subpath := range removed {
+		remObj := foreignObjs[subpath]
+		localObj, err := m.GetInfo(shared.CreatePath(m.Root, subpath))
+		if err != nil {
+			log.Println("SyncModel: failed to fetch local obj for remove check!")
+			continue
+		}
+		// this works because the deletion files will already have been created, but the removal not applied to the local model yet
+		if m.isRemoved(localObj.Identification) {
+			um := shared.CreateUpdateMessage(shared.OpRemove, *remObj)
+			umList = append(umList, &um)
+			log.Println("Remote Remove", subpath)
+		}
+	}
+	return umList, nil
 }
 
 /*
@@ -721,6 +756,13 @@ func (m *Model) isModified(path *shared.RelativePath) bool {
 	}
 	// otherwise a change has happened
 	return true
+}
+
+/*
+isRemoved checks whether a file is due for deletion.
+*/
+func (m *Model) isRemoved(identification string) bool {
+	return shared.FileExists(m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR + "/" + identification)
 }
 
 /*
