@@ -71,9 +71,6 @@ func (m *Model) Update() error {
 /*
 PartialUpdate of the model state. Scope is the the FULL path of the scope in
 absolute terms!
-
-TODO Get concurrency to work here. Last time I had trouble with the Objinfo map.
-TODO Make scope a RelativePath?
 */
 func (m *Model) PartialUpdate(scope string) error {
 	// update local model
@@ -96,6 +93,8 @@ UpdateMessages required to update the current model to the foreign model. These
 must still be applied!
 */
 func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, error) {
+	/*TODO enforce that .tinzenite is compatible! If not only ok if bootstrap!
+	Or explicite merge command? Look into that...*/
 	// simply case: simply take over foreign model
 	if m.IsEmpty() {
 		log.Println("I'M EMPTY; TAKE OVER FOREIGN MODEL COMPLETELY!")
@@ -105,12 +104,23 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 			obj.Objects = nil
 			// create update message
 			um := shared.CreateUpdateMessage(shared.OpCreate, obj)
-			/*TODO if I can use channel instead this can be go-ed*/
 			umList = append(umList, &um)
 		})
+		/*TODO take over remote .TINZENITEDIR IDs for own*/
+		log.Println("TODO: TAKE OVER REMOVE .TINZENITE!")
 		return umList, nil
 	}
-	log.Println("TODO: NOT SUPPORTED FOR NON EMPTY MODEL YET")
+	// a bit more complex: must check all so start by generating map of paths
+	foreignPaths := make(map[string]bool)
+	root.ForEach(func(obj shared.ObjectInfo) {
+		foreignPaths[obj.Path] = true
+	})
+	// compare to local version
+	created, modified, removed := m.compareMaps(m.Root, foreignPaths)
+	log.Println("Created:", len(created), "Modified:", len(modified), "Removed:", len(removed))
+	/*TODO need to check the modified if they really have been modified... BEFORE UM!
+	OR does applymodify already do something smart? Don't think so...*/
+	log.Println("TODO: GENERATE UPDATEMSG FROM LISTS")
 	return nil, shared.ErrUnsupported
 }
 
@@ -396,7 +406,7 @@ func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.Obje
 	localModified := m.isModified(path)
 	// check for remote modifications
 	if remoteObject != nil {
-		/*TODO implement conflict behaviour!*/
+		/*TODO Check whether modification must even be applied?*/
 		// if remote change the local file may not have been modified
 		if localModified {
 			log.Println("Merge error! Untracked local changes!")
@@ -423,7 +433,8 @@ func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.Obje
 		}
 	} else {
 		if !localModified {
-			// nothing to do, done
+			// nothing to do, done (shouldn't be called but doesn't harm anything)
+			log.Println("WARNING: modify should not be called if nothing actually changed!")
 			return nil
 		}
 		// update version for local change
@@ -496,10 +507,37 @@ func (m *Model) updateLocal(scope string) error {
 	if err != nil {
 		return err
 	}
-	// we'll need this for every create* op, so create only once:
+	// now get differences
+	created, modified, removed := m.compareMaps(scope, current)
+	// will need this for every Op so create only once
 	relPath := shared.CreatePathRoot(m.Root)
+	// first check creations
+	for _, subpath := range created {
+		m.ApplyCreate(relPath.Apply(subpath), nil)
+	}
+	// then modifications
+	for _, subpath := range modified {
+		modPath := relPath.Apply(subpath)
+		// if no modifications no need to try to apply any
+		if m.isModified(modPath) {
+			m.ApplyModify(modPath, nil)
+		}
+	}
+	// finally deletions
+	for _, subpath := range removed {
+		m.ApplyRemove(relPath.Apply(subpath), nil)
+	}
+	// done
+	return nil
+}
+
+/*
+compareMaps checks the given path map and returns all operations that need to be
+applied to the internal model to match the current path map.
+*/
+func (m *Model) compareMaps(scope string, current map[string]bool) ([]string, []string, []string) {
 	// now: compare old tracked with new version
-	var removed, created []string
+	var created, modified, removed []string
 	for subpath := range m.TrackedPaths {
 		// ignore if not in partial update path AND not part of path to scope
 		if !strings.HasPrefix(m.Root+"/"+subpath, scope) && !strings.Contains(scope, m.Root+"/"+subpath) {
@@ -509,7 +547,7 @@ func (m *Model) updateLocal(scope string) error {
 		if ok {
 			// paths that still exist must only be checked for MODIFY
 			delete(current, subpath)
-			m.ApplyModify(relPath.Apply(subpath), nil)
+			modified = append(modified, subpath)
 		} else {
 			// REMOVED - paths that don't exist anymore have been removed
 			removed = append(removed, subpath)
@@ -523,15 +561,7 @@ func (m *Model) updateLocal(scope string) error {
 		}
 		created = append(created, subpath)
 	}
-	// update m.Tracked
-	for _, subpath := range removed {
-		m.ApplyRemove(relPath.Apply(subpath), nil)
-	}
-	for _, subpath := range created {
-		// nil for version because new local object
-		m.ApplyCreate(relPath.Apply(subpath), nil)
-	}
-	return nil
+	return created, modified, removed
 }
 
 /*
