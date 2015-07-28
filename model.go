@@ -133,10 +133,18 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 				log.Println("Model: bootstrap:", "local model tracked and stin not in sync!")
 				return nil, shared.ErrIllegalFileState
 			}
-			// assign other ID (rest should still be okay!)
+			// assign other ID always (otherwise cummulative merge won't work)
 			localstin.Identification = foreignObj.Identification
 			// set to local model
 			m.StaticInfos[remoteSubpath] = localstin
+			// if content or version not same, add update message as modify
+			_, valid := localstin.Version.Valid(foreignObj.Version, m.SelfID)
+			if localstin.Content != foreignObj.Content || !valid {
+				// this will overwrite the local file! but here we want this behaviour, so all ok
+				log.Println("Model: bootstrap: force updating", remoteSubpath, ".")
+				um := shared.CreateUpdateMessage(shared.OpModify, *foreignObj)
+				umList = append(umList, &um)
+			}
 		}
 		// done: we return all updates that we could not manually merge into our own model
 		log.Println("Model: bootstrap:", "still missing", len(umList), "updates.")
