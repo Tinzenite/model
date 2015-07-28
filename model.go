@@ -126,7 +126,7 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 		remObj := foreignObjs[subpath]
 		um := shared.CreateUpdateMessage(shared.OpCreate, *remObj)
 		umList = append(umList, &um)
-		log.Println("Remote Create", subpath)
+		// log.Println("Remote Create", subpath)
 	}
 	for _, subpath := range modified {
 		localObj, err := m.GetInfo(shared.CreatePath(m.Root, subpath))
@@ -139,7 +139,7 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 		if !localObj.Equal(remObj) {
 			um := shared.CreateUpdateMessage(shared.OpModify, *remObj)
 			umList = append(umList, &um)
-			log.Println("Remote Modify", subpath)
+			// log.Println("Remote Modify", subpath)
 		}
 	}
 	for _, subpath := range removed {
@@ -153,7 +153,7 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 		if m.isRemoved(localObj.Identification) {
 			um := shared.CreateUpdateMessage(shared.OpRemove, *remObj)
 			umList = append(umList, &um)
-			log.Println("Remote Remove", subpath)
+			// log.Println("Remote Remove", subpath)
 		}
 	}
 	return umList, nil
