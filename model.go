@@ -145,8 +145,9 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 
 /*
 BootstrapModel takes a foreign model and bootstraps the current one correctly.
-The foreign model will be used to determine all shared files. All other differences
-can then be synchronized as before via the update messages return by this function.
+The foreign model will be used to determine all shared files. All other
+differences can then be synchronized as before via the update messages return by
+this function.
 */
 func (m *Model) BootstrapModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, error) {
 	/*TODO for now just warn, should work though... :P */
