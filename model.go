@@ -93,31 +93,56 @@ UpdateMessages required to update the current model to the foreign model. These
 must still be applied!
 */
 func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, error) {
-	/*TODO enforce that .tinzenite is compatible! If not only ok if bootstrap!
-	Or explicite merge command? Look into that...*/
-	// simply case: simply take over foreign model
-	if m.IsEmpty() {
-		log.Println("I'M EMPTY; TAKE OVER FOREIGN MODEL COMPLETELY!")
-		var umList []*shared.UpdateMessage
-		root.ForEach(func(obj shared.ObjectInfo) {
-			// remove subobjects for message
-			obj.Objects = nil
-			// create update message
-			um := shared.CreateUpdateMessage(shared.OpCreate, obj)
-			umList = append(umList, &um)
-		})
-		/*TODO take over remote .TINZENITEDIR IDs for own*/
-		log.Println("TODO: TAKE OVER REMOVE .TINZENITE!")
-		return umList, nil
-	}
-	// a bit more complex: must check all so start by generating map of paths
+	// we'll need the simple lists of the foreign model for both cases
 	foreignPaths := make(map[string]bool)
 	foreignObjs := make(map[string]*shared.ObjectInfo)
 	root.ForEach(func(obj shared.ObjectInfo) {
+		// write to paths
 		foreignPaths[obj.Path] = true
+		// strip of children and write to objects
 		obj.Objects = nil
 		foreignObjs[obj.Path] = &obj
 	})
+	// BOOTSTRAP case: simply take over foreign model
+	if m.IsEmpty() {
+		log.Println("Model: Bootstrapping from remote model.")
+		// list of all updates that will survive the bootstrap and need to be fetched
+		var umList []*shared.UpdateMessage
+		// take over remote .TINZENITEDIR IDs for own
+		for remoteSubpath := range foreignPaths {
+			// fetch associated ObjectInfo
+			foreignObj, exists := foreignObjs[remoteSubpath]
+			if !exists {
+				log.Println("Model: bootstrap:", "reading remote model failed, not in sync!")
+				return nil, shared.ErrIllegalFileState
+			}
+			// check whether object exists locally (should be case for all .TINZENITEDIR files that we already have locally)
+			_, exists = m.TrackedPaths[remoteSubpath]
+			if !exists {
+				log.Println("Model: bootstrap: adding", remoteSubpath, "to get via update.")
+				// this means that we must fetch the file, so add to umList
+				um := shared.CreateUpdateMessage(shared.OpCreate, *foreignObj)
+				umList = append(umList, &um)
+				// continue with next object
+				continue
+			}
+			// if it exists overwrite the corresponding stin
+			localstin, exists := m.StaticInfos[remoteSubpath]
+			if !exists {
+				// shouldn't happen but just in case...
+				log.Println("Model: bootstrap:", "local model tracked and stin not in sync!")
+				return nil, shared.ErrIllegalFileState
+			}
+			// assign other ID (rest should still be okay!)
+			localstin.Identification = foreignObj.Identification
+			// set to local model
+			m.StaticInfos[remoteSubpath] = localstin
+		}
+		// done: we return all updates that we could not manually merge into our own model
+		log.Println("Model: bootstrap:", "still missing", len(umList), "updates.")
+		return umList, nil
+	}
+	// MERGE case
 	// compare to local version
 	created, modified, removed := m.compareMaps(m.Root, foreignPaths)
 	// build update messages
