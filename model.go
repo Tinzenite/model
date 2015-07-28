@@ -93,6 +93,8 @@ UpdateMessages required to update the current model to the foreign model. These
 must still be applied!
 */
 func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, error) {
+	/*TODO make sure that the .TINZENITEDIR is compatible! */
+	log.Println("SycnModel: WARNING no check if compatible model yet!")
 	// we'll need the simple lists of the foreign model for both cases
 	foreignPaths := make(map[string]bool)
 	foreignObjs := make(map[string]*shared.ObjectInfo)
@@ -103,54 +105,6 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 		obj.Objects = nil
 		foreignObjs[obj.Path] = &obj
 	})
-	// BOOTSTRAP case: simply take over foreign model
-	if m.IsEmpty() {
-		log.Println("Model: Bootstrapping from remote model.")
-		// list of all updates that will survive the bootstrap and need to be fetched
-		var umList []*shared.UpdateMessage
-		// take over remote .TINZENITEDIR IDs for own
-		for remoteSubpath := range foreignPaths {
-			// fetch associated ObjectInfo
-			foreignObj, exists := foreignObjs[remoteSubpath]
-			if !exists {
-				log.Println("Model: bootstrap:", "reading remote model failed, not in sync!")
-				return nil, shared.ErrIllegalFileState
-			}
-			// check whether object exists locally (should be case for all .TINZENITEDIR files that we already have locally)
-			_, exists = m.TrackedPaths[remoteSubpath]
-			if !exists {
-				log.Println("Model: bootstrap: adding", remoteSubpath, "to get via update.")
-				// this means that we must fetch the file, so add to umList
-				um := shared.CreateUpdateMessage(shared.OpCreate, *foreignObj)
-				umList = append(umList, &um)
-				// continue with next object
-				continue
-			}
-			// if it exists overwrite the corresponding stin
-			localstin, exists := m.StaticInfos[remoteSubpath]
-			if !exists {
-				// shouldn't happen but just in case...
-				log.Println("Model: bootstrap:", "local model tracked and stin not in sync!")
-				return nil, shared.ErrIllegalFileState
-			}
-			// assign other ID always (otherwise cummulative merge won't work)
-			localstin.Identification = foreignObj.Identification
-			// set to local model
-			m.StaticInfos[remoteSubpath] = localstin
-			// if content or version not same, add update message as modify
-			_, valid := localstin.Version.Valid(foreignObj.Version, m.SelfID)
-			if localstin.Content != foreignObj.Content || !valid {
-				// this will overwrite the local file! but here we want this behaviour, so all ok
-				log.Println("Model: bootstrap: force updating", remoteSubpath, ".")
-				um := shared.CreateUpdateMessage(shared.OpModify, *foreignObj)
-				umList = append(umList, &um)
-			}
-		}
-		// done: we return all updates that we could not manually merge into our own model
-		log.Println("Model: bootstrap:", "still missing", len(umList), "updates.")
-		return umList, nil
-	}
-	// MERGE case
 	// compare to local version
 	created, modified, removed := m.compareMaps(m.Root, foreignPaths)
 	// build update messages
@@ -159,7 +113,6 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 		remObj := foreignObjs[subpath]
 		um := shared.CreateUpdateMessage(shared.OpCreate, *remObj)
 		umList = append(umList, &um)
-		// log.Println("Remote Create", subpath)
 	}
 	for _, subpath := range modified {
 		localObj, err := m.GetInfo(shared.CreatePath(m.Root, subpath))
@@ -172,7 +125,6 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 		if !localObj.Equal(remObj) {
 			um := shared.CreateUpdateMessage(shared.OpModify, *remObj)
 			umList = append(umList, &um)
-			// log.Println("Remote Modify", subpath)
 		}
 	}
 	for _, subpath := range removed {
@@ -186,9 +138,67 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 		if m.isRemoved(localObj.Identification) {
 			um := shared.CreateUpdateMessage(shared.OpRemove, *remObj)
 			umList = append(umList, &um)
-			// log.Println("Remote Remove", subpath)
 		}
 	}
+	return umList, nil
+}
+
+/*
+BootstrapModel takes a foreign model and bootstraps the current one correctly.
+The foreign model will be used to determine all shared files. All other differences
+can then be synchronized as before via the update messages return by this function.
+*/
+func (m *Model) BootstrapModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, error) {
+	/*TODO for now just warn, should work though... :P */
+	if !m.IsEmpty() {
+		log.Println("BootstrapModel: WARNING non empty bootstrap! Need to test this yet...")
+	}
+	log.Println("Model: Bootstrapping from remote model.")
+	// we'll need the simple lists of the foreign model
+	foreignObjs := make(map[string]*shared.ObjectInfo)
+	root.ForEach(func(obj shared.ObjectInfo) {
+		// strip of children and write to objects
+		obj.Objects = nil
+		foreignObjs[obj.Path] = &obj
+	})
+	// list of all updates that will survive the bootstrap and need to be fetched
+	var umList []*shared.UpdateMessage
+	// take over remote .TINZENITEDIR IDs for own
+	for _, remoteObj := range foreignObjs {
+		// get path
+		remoteSubpath := remoteObj.Path
+		// check whether object exists locally (should be case for all .TINZENITEDIR files that we already have locally)
+		_, exists := m.TrackedPaths[remoteSubpath]
+		if !exists {
+			log.Println("Model: bootstrap: adding", remoteSubpath, "to get via update.")
+			// this means that we must fetch the file, so add to umList
+			um := shared.CreateUpdateMessage(shared.OpCreate, *remoteObj)
+			umList = append(umList, &um)
+			// continue with next object
+			continue
+		}
+		// if it exists overwrite the corresponding stin
+		localstin, exists := m.StaticInfos[remoteSubpath]
+		if !exists {
+			// shouldn't happen but just in case...
+			log.Println("Model: bootstrap:", "local model tracked and stin not in sync!")
+			return nil, shared.ErrIllegalFileState
+		}
+		// assign other ID always (otherwise cummulative merge won't work)
+		localstin.Identification = remoteObj.Identification
+		// set to local model
+		m.StaticInfos[remoteSubpath] = localstin
+		// if content or version not same, add update message as modify
+		_, valid := localstin.Version.Valid(remoteObj.Version, m.SelfID)
+		if localstin.Content != remoteObj.Content || !valid {
+			// this will overwrite the local file! but here we want this behaviour, so all ok
+			log.Println("Model: bootstrap: force updating", remoteSubpath, ".")
+			um := shared.CreateUpdateMessage(shared.OpModify, *remoteObj)
+			umList = append(umList, &um)
+		}
+	}
+	// done: we return all updates that we could not manually merge into our own model
+	log.Println("Model: bootstrap:", "still missing", len(umList), "updates.")
 	return umList, nil
 }
 
