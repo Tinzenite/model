@@ -171,7 +171,6 @@ func (m *Model) BootstrapModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage
 		// check whether object exists locally (should be case for all .TINZENITEDIR files that we already have locally)
 		_, exists := m.TrackedPaths[remoteSubpath]
 		if !exists {
-			log.Println("Model: bootstrap: adding", remoteSubpath, "to get via update.")
 			// this means that we must fetch the file, so add to umList
 			um := shared.CreateUpdateMessage(shared.OpCreate, *remoteObj)
 			umList = append(umList, &um)
@@ -199,7 +198,6 @@ func (m *Model) BootstrapModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage
 		}
 	}
 	// done: we return all updates that we could not manually merge into our own model
-	log.Println("Model: bootstrap:", "still missing", len(umList), "updates.")
 	return umList, nil
 }
 
