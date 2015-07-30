@@ -543,10 +543,10 @@ ApplyRemove applies a remove operation.
 func (m *Model) ApplyRemove(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
 	remoteRemove := remoteObject != nil
 	localFileExists := shared.FileExists(path.FullPath())
-	// if part of the REMOVEDIR simply remove and done, no remove of the remove!
+	// check that deletion logic is sane (don't want to create deletion on deletion)
 	if strings.HasPrefix(path.SubPath(), shared.TINZENITEDIR+"/"+shared.REMOVEDIR+"/") {
-		// apply to model as direct removal (removes file and removes from model)
-		return m.directRemove(path)
+		m.warn("removedir objects should not leak with removal!")
+		return nil
 	}
 	// if locally initiated, just apply
 	if !remoteRemove {
@@ -704,8 +704,18 @@ removing the file from the model.
 func (m *Model) localRemove(path *shared.RelativePath) error {
 	removeDirectory := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR
 	// get stin for notify
-	stin := m.StaticInfos[path.SubPath()]
-	// remove from model
+	stin, exists := m.StaticInfos[path.SubPath()]
+	if !exists {
+		m.log("LocalRemove: stin is missing!")
+		return shared.ErrIllegalFileState
+	}
+	// sanity check
+	if m.isRemoved(stin.Identification) {
+		// shouldn't happen but let's be sure
+		m.warn("LocalRemove: file already removed!")
+		return nil
+	}
+	// direct remove
 	err := m.directRemove(path)
 	if err != nil {
 		return err
@@ -713,7 +723,7 @@ func (m *Model) localRemove(path *shared.RelativePath) error {
 	// make directories
 	err = shared.MakeDirectories(removeDirectory+"/"+stin.Identification, shared.REMOVECHECKDIR, shared.REMOVEDONEDIR)
 	if err != nil {
-		m.log("Making dir error")
+		m.log("making removedir error")
 		return err
 	}
 	// write peer list to check which must all be notified of removal
@@ -729,14 +739,14 @@ func (m *Model) localRemove(path *shared.RelativePath) error {
 			return err
 		}
 	}
-	// write own peer file also to done dir
+	// write own peer file also to done dir as removal already applied locally
 	err = ioutil.WriteFile(removeDirectory+"/"+stin.Identification+"/"+shared.REMOVEDONEDIR+"/"+m.SelfID, []byte(""), shared.FILEPERMISSIONMODE)
 	if err != nil {
 		m.log("Couldn't write own peer file to done!")
 		return err
 	}
 	// make sure deletion is caught
-	err = m.PartialUpdate(removeDirectory) /*TODO can this cause recursion? CHECK!*/
+	err = m.PartialUpdate(removeDirectory)
 	if err != nil {
 		m.log("Error partial updating!")
 		return err
