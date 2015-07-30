@@ -229,41 +229,6 @@ func (m *Model) HasUpdate(um *shared.UpdateMessage) bool {
 }
 
 /*
-SyncObject returns an UpdateMessage of the change we may need to apply if
-applicable. May return nil, that means that the update must not be applied (for
-example if the object has not changed).
-
-TODO: am I using this somewhere? IF NOT WHY NOT?
-*/
-func (m *Model) SyncObject(obj *shared.ObjectInfo) (*shared.UpdateMessage, error) {
-	// we'll need the local path so create that up front
-	path := shared.CreatePath(m.Root, obj.Path)
-	// modfiy
-	_, exists := m.TrackedPaths[path.SubPath()]
-	if exists {
-		// get staticinfo
-		stin, ok := m.StaticInfos[path.SubPath()]
-		if !ok {
-			return nil, errModelInconsitent
-		}
-		// sanity checks
-		if stin.Identification != obj.Identification || stin.Directory != obj.Directory {
-			return nil, errMismatch
-		}
-		/*TODO what about directories?*/
-		if stin.Content == obj.Content {
-			/*TODO what about the version numbers?*/
-			log.Println("No update required!")
-			return nil, nil
-		}
-		um := shared.CreateUpdateMessage(shared.OpModify, *obj)
-		return &um, nil
-	}
-	log.Println("Create and delete not yet implemented!")
-	return nil, shared.ErrUnsupported
-}
-
-/*
 ApplyUpdateMessage takes an update message and applies it to the model. Should
 be called after the file operation has been applied but before the next update!
 */
