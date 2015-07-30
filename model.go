@@ -21,6 +21,8 @@ type Model struct {
 	SelfID       string
 	TrackedPaths map[string]bool
 	StaticInfos  map[string]staticinfo
+	/*TODO make AllowLogging setable somewhere, for now always on*/
+	AllowLogging bool
 	updatechan   chan shared.UpdateMessage
 }
 
@@ -36,7 +38,8 @@ func Create(root, peerid string) (*Model, error) {
 		Root:         root,
 		TrackedPaths: make(map[string]bool),
 		StaticInfos:  make(map[string]staticinfo),
-		SelfID:       peerid}
+		SelfID:       peerid,
+		AllowLogging: true}
 	return m, nil
 }
 
@@ -107,16 +110,16 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 	authPath := shared.TINZENITEDIR + "/" + shared.ORGDIR + "/" + shared.AUTHJSON
 	foreignAuth, exists := foreignObjs[authPath]
 	if !exists {
-		log.Println("SyncModel: auth doesn't exist in foreign model!")
+		m.log("SyncModel: auth doesn't exist in foreign model!")
 		return nil, shared.ErrIllegalFileState
 	}
 	localAuth, err := m.GetInfo(shared.CreatePath(m.Root, authPath))
 	if err != nil {
-		log.Println("SyncModel: local model doesn't have auth!")
+		m.log("SyncModel: local model doesn't have auth!")
 		return nil, shared.ErrIllegalFileState
 	}
 	if foreignAuth.Content != localAuth.Content {
-		log.Println("SyncModel: models seem to be incompatible!")
+		m.log("SyncModel: models seem to be incompatible!")
 		return nil, errIncompatibleModel
 	}
 	// compare to local version
@@ -131,7 +134,7 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 	for _, subpath := range modified {
 		localObj, err := m.GetInfo(shared.CreatePath(m.Root, subpath))
 		if err != nil {
-			log.Println("SyncModel: failed to fetch local obj for modify check!")
+			m.log("SyncModel: failed to fetch local obj for modify check!")
 			continue
 		}
 		remObj := foreignObjs[subpath]
@@ -145,7 +148,7 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 		remObj := foreignObjs[subpath]
 		localObj, err := m.GetInfo(shared.CreatePath(m.Root, subpath))
 		if err != nil {
-			log.Println("SyncModel: failed to fetch local obj for remove check!")
+			m.log("SyncModel: failed to fetch local obj for remove check!")
 			continue
 		}
 		// this works because the deletion files will already have been created, but the removal not applied to the local model yet
@@ -166,9 +169,9 @@ this function.
 func (m *Model) BootstrapModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, error) {
 	/*TODO for now just warn, should work though... :P */
 	if !m.IsEmpty() {
-		log.Println("BootstrapModel: WARNING non empty bootstrap! Need to test this yet...")
+		m.warn("bootstrap: non empty bootstrap! Need to test this yet...")
 	}
-	log.Println("Model: Bootstrapping from remote model.")
+	m.log("Bootstrapping from remote model.")
 	// we'll need the simple lists of the foreign model
 	foreignObjs := make(map[string]*shared.ObjectInfo)
 	root.ForEach(func(obj shared.ObjectInfo) {
@@ -195,7 +198,7 @@ func (m *Model) BootstrapModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage
 		localstin, exists := m.StaticInfos[remoteSubpath]
 		if !exists {
 			// shouldn't happen but just in case...
-			log.Println("Model: bootstrap:", "local model tracked and stin not in sync!")
+			m.log("bootstrap:", "local model tracked and stin not in sync!")
 			return nil, shared.ErrIllegalFileState
 		}
 		// assign other ID always (otherwise cummulative merge won't work)
@@ -206,7 +209,7 @@ func (m *Model) BootstrapModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage
 		_, valid := localstin.Version.Valid(remoteObj.Version, m.SelfID)
 		if localstin.Content != remoteObj.Content || !valid {
 			// this will overwrite the local file! but here we want this behaviour, so all ok
-			log.Println("Model: bootstrap: force updating", remoteSubpath, ".")
+			m.log("bootstrap: force updating", remoteSubpath, ".")
 			um := shared.CreateUpdateMessage(shared.OpModify, *remoteObj)
 			umList = append(umList, &um)
 		}
@@ -244,7 +247,7 @@ func (m *Model) ApplyUpdateMessage(msg *shared.UpdateMessage) error {
 	case shared.OpRemove:
 		err = m.ApplyRemove(path, &msg.Object)
 	default:
-		log.Printf("Unknown operation in UpdateMessage: %s\n", msg.Operation)
+		m.log("Unknown operation in UpdateMessage:", msg.Operation.String())
 		return shared.ErrUnsupported
 	}
 	if err != nil {
@@ -341,13 +344,13 @@ contained in m.Tracked. Directories are NOT traversed!
 func (m *Model) GetInfo(path *shared.RelativePath) (*shared.ObjectInfo, error) {
 	_, exists := m.TrackedPaths[path.SubPath()]
 	if !exists {
-		log.Println("GetInfo: path not tracked!", path.SubPath())
+		m.log("GetInfo: path not tracked!", path.SubPath())
 		return nil, shared.ErrUntracked
 	}
 	// get staticinfo
 	stin, exists := m.StaticInfos[path.SubPath()]
 	if !exists {
-		log.Println("GetInfo: stin not tracked!", path.SubPath())
+		m.log("GetInfo: stin not tracked!", path.SubPath())
 		return nil, shared.ErrUntracked
 	}
 	stat, err := os.Lstat(path.FullPath())
@@ -412,7 +415,7 @@ func (m *Model) ApplyCreate(path *shared.RelativePath, remoteObject *shared.Obje
 	// sanity check if the object already exists locally
 	_, ok := m.TrackedPaths[path.SubPath()]
 	if ok {
-		log.Printf("Object at <%s> exists locally! Can not apply create!\n", path.FullPath())
+		m.log("Object exists locally! Can not apply create!", path.FullPath())
 		return shared.ErrConflict
 	}
 	// NOTE: we don't explicitely check m.Objinfo because we'll just overwrite it if already exists
@@ -476,7 +479,7 @@ func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.Obje
 	// sanity check
 	_, ok := m.TrackedPaths[path.SubPath()]
 	if !ok {
-		log.Println("Object doesn't exist locally!")
+		m.log("Object doesn't exist locally!")
 		return shared.ErrIllegalFileState
 	}
 	// fetch stin
@@ -491,13 +494,13 @@ func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.Obje
 		/*TODO Check whether modification must even be applied?*/
 		// if remote change the local file may not have been modified
 		if localModified {
-			log.Println("Merge error! Untracked local changes!")
+			m.log("Merge error! Untracked local changes!")
 			return shared.ErrConflict
 		}
 		// detect conflict
 		ver, ok := stin.Version.Valid(remoteObject.Version, m.SelfID)
 		if !ok {
-			log.Println("Merge error!")
+			m.log("Merge error!")
 			return shared.ErrConflict
 		}
 		// apply version update
@@ -511,12 +514,12 @@ func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.Obje
 			}
 		} else {
 			/*TODO can this happen for directories? Only once move is implemented, right?*/
-			log.Println("WARNING: modify not implemented for directories!")
+			m.warn("modify not implemented for directories!")
 		}
 	} else {
 		if !localModified {
 			// nothing to do, done (shouldn't be called but doesn't harm anything)
-			log.Println("WARNING: modify should not be called if nothing actually changed!")
+			m.warn("modify should not be called if nothing actually changed!")
 			return nil
 		}
 		// update version for local change
@@ -550,13 +553,13 @@ func (m *Model) ApplyRemove(path *shared.RelativePath, remoteObject *shared.Obje
 		// remove file
 		err := os.Remove(path.FullPath())
 		if err != nil {
-			log.Println("Couldn't remove file")
+			m.log("Couldn't remove file")
 			return err
 		}
 		// apply local deletion
 		err = m.localRemove(path)
 		if err != nil {
-			log.Println("local remove didn't work")
+			m.log("local remove didn't work:", err.Error())
 			return err
 		}
 	}
@@ -571,7 +574,7 @@ func (m *Model) IsEmpty() bool {
 	// we could do some cool stuff on m.Tracked etc, but...
 	count, err := shared.CountFiles(m.Root)
 	if err != nil {
-		log.Println("IsEmpty:", err)
+		m.log("IsEmpty:", err.Error())
 		return false
 	}
 	// ...just check whether root contains one dir and it is the TINZENITEDIR
@@ -654,7 +657,7 @@ func (m *Model) checkRemove() error {
 	removeDir := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR
 	allRemovals, err := ioutil.ReadDir(removeDir)
 	if err != nil {
-		log.Println("reading all removals failed")
+		m.log("reading all removals failed")
 		return err
 	}
 	// check for each removal
@@ -662,7 +665,7 @@ func (m *Model) checkRemove() error {
 		objRemovePath := removeDir + "/" + stat.Name()
 		allCheck, err := ioutil.ReadDir(objRemovePath + "/" + shared.REMOVECHECKDIR)
 		if err != nil {
-			log.Println("Failed reading check peer list!")
+			m.log("Failed reading check peer list!")
 			return err
 		}
 		// test whether we can remove it
@@ -676,7 +679,7 @@ func (m *Model) checkRemove() error {
 		if complete {
 			err := m.directRemove(shared.CreatePathRoot(m.Root).Apply(objRemovePath))
 			if err != nil {
-				log.Println("Failed to direct remove!")
+				m.log("Failed to direct remove!")
 				return err
 			}
 		}
@@ -700,32 +703,32 @@ func (m *Model) localRemove(path *shared.RelativePath) error {
 	// make directories
 	err = shared.MakeDirectories(removeDirectory+"/"+stin.Identification, shared.REMOVECHECKDIR, shared.REMOVEDONEDIR)
 	if err != nil {
-		log.Println("Making dir error")
+		m.log("Making dir error")
 		return err
 	}
 	// write peer list to check which must all be notified of removal
 	peers, err := m.readPeers()
 	if err != nil {
-		log.Println("Failed to read peers")
+		m.log("Failed to read peers")
 		return err
 	}
 	for _, peer := range peers {
 		err = ioutil.WriteFile(removeDirectory+"/"+stin.Identification+"/"+shared.REMOVECHECKDIR+"/"+peer, []byte(""), shared.FILEPERMISSIONMODE)
 		if err != nil {
-			log.Println("Couldn't write peer file", peer, "to check!")
+			m.log("Couldn't write peer file", peer, "to check!")
 			return err
 		}
 	}
 	// write own peer file also to done dir
 	err = ioutil.WriteFile(removeDirectory+"/"+stin.Identification+"/"+shared.REMOVEDONEDIR+"/"+m.SelfID, []byte(""), shared.FILEPERMISSIONMODE)
 	if err != nil {
-		log.Println("Couldn't write own peer file to done!")
+		m.log("Couldn't write own peer file to done!")
 		return err
 	}
 	// make sure deletion is caught
 	err = m.PartialUpdate(removeDirectory) /*TODO can this cause recursion? CHECK!*/
 	if err != nil {
-		log.Println("Error partial updating!")
+		m.log("Error partial updating!")
 		return err
 	}
 	// send notify
@@ -748,7 +751,7 @@ of it!
 func (m *Model) directRemove(path *shared.RelativePath) error {
 	objList, err := m.partialPopulateMap(path.FullPath())
 	if err != nil {
-		log.Println("partialPopulateMap failed in directRemove")
+		m.log("partialPopulateMap failed in directRemove")
 		return err
 	}
 	// iterate over each path
@@ -758,7 +761,7 @@ func (m *Model) directRemove(path *shared.RelativePath) error {
 		if shared.FileExists(relPath.FullPath()) {
 			err := os.RemoveAll(relPath.FullPath())
 			if err != nil {
-				log.Println("directRemove failed to remove the file itself!")
+				m.log("directRemove failed to remove the file itself!")
 				return err
 			}
 		}
@@ -775,7 +778,7 @@ isModified checks whether a file has been modified.
 func (m *Model) isModified(path *shared.RelativePath) bool {
 	stin, ok := m.StaticInfos[path.SubPath()]
 	if !ok {
-		log.Println("Staticinfo lookup failed for", path.SubPath(), "!")
+		m.log("Staticinfo lookup failed for", path.SubPath(), "!")
 		return false
 	}
 	// no need for further work here
@@ -834,7 +837,7 @@ func (m *Model) notify(op shared.Operation, path *shared.RelativePath, obj *shar
 	log.Printf("%s: %s\n", op, path.LastElement())
 	if m.updatechan != nil {
 		if obj == nil {
-			log.Println("Failed to notify due to nil obj!")
+			m.log("Failed to notify due to nil obj!")
 			return
 		}
 		m.updatechan <- shared.CreateUpdateMessage(op, *obj)
@@ -864,7 +867,7 @@ func (m *Model) partialPopulateMap(rootPath string) (map[string]bool, error) {
 		// sanity check
 		thisPath := relPath.Apply(subpath)
 		if thisPath.FullPath() != subpath {
-			log.Println("Failed to walk due to wrong path!", thisPath.FullPath())
+			m.log("Failed to walk due to wrong path!", thisPath.FullPath())
 			return nil
 		}
 		// resolve matcher
@@ -901,4 +904,20 @@ func (m *Model) readPeers() ([]string, error) {
 		IDs = append(IDs, peer.Identification)
 	}
 	return IDs, nil
+}
+
+/*
+Log function that respects the AllowLogging flag.
+*/
+func (m *Model) log(msg ...string) {
+	if m.AllowLogging {
+		log.Println("Model:", msg)
+	}
+}
+
+/*
+Warn function.
+*/
+func (m *Model) warn(msg ...string) {
+	log.Println("Model: WARNING:", msg)
 }
