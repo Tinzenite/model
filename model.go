@@ -541,14 +541,13 @@ func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.Obje
 ApplyRemove applies a remove operation.
 */
 func (m *Model) ApplyRemove(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
-	// if part of the REMOVEDIR symply remove and done, no remove of the remove!
-	if strings.HasPrefix(path.SubPath(), shared.TINZENITEDIR+"/"+shared.REMOVEDIR+"/") {
-		m.warn("deletion of remove objects leaking!")
-		// ignore
-		return nil
-	}
 	remoteRemove := remoteObject != nil
 	localFileExists := shared.FileExists(path.FullPath())
+	// if part of the REMOVEDIR simply remove and done, no remove of the remove!
+	if strings.HasPrefix(path.SubPath(), shared.TINZENITEDIR+"/"+shared.REMOVEDIR+"/") {
+		// apply to model as direct removal (removes file and removes from model)
+		return m.directRemove(path)
+	}
 	// if locally initiated, just apply
 	if !remoteRemove {
 		// if not a remote remove the deletion must be applied locally
@@ -556,6 +555,11 @@ func (m *Model) ApplyRemove(path *shared.RelativePath, remoteObject *shared.Obje
 	}
 	// local remove
 	if localFileExists {
+		// safe guard against unwanted deletions
+		if path.RootPath() != m.Root || path.SubPath() == "" {
+			m.warn("trying to remove illegal path, will ignore!", path.FullPath())
+			return nil
+		}
 		// remove file
 		err := os.Remove(path.FullPath())
 		if err != nil {
@@ -919,7 +923,7 @@ func (m *Model) log(msg ...string) {
 	if m.AllowLogging {
 		toPrint := []string{"Model:"}
 		toPrint = append(toPrint, msg...)
-		log.Println(toPrint)
+		log.Println(strings.Join(toPrint, " "))
 	}
 }
 
@@ -929,5 +933,5 @@ Warn function.
 func (m *Model) warn(msg ...string) {
 	toPrint := []string{"Model:", "WARNING:"}
 	toPrint = append(toPrint, msg...)
-	log.Println(toPrint)
+	log.Println(strings.Join(toPrint, " "))
 }
