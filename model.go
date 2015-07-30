@@ -423,6 +423,11 @@ func (m *Model) ApplyCreate(path *shared.RelativePath, remoteObject *shared.Obje
 	var err error
 	// if remote create
 	if remoteObject != nil {
+		// check if removed --> if yes warn and ignore update
+		if m.isRemoved(remoteObject.Identification) {
+			m.warn("received create for object pending removal!")
+			return nil
+		}
 		// create conflict
 		if localCreate {
 			return shared.ErrConflict
@@ -553,25 +558,33 @@ func (m *Model) ApplyRemove(path *shared.RelativePath, remoteObject *shared.Obje
 		// if not a remote remove the deletion must be applied locally
 		return m.localRemove(path)
 	}
-	// local remove
+	log.Println("REMOTE REMOVE")
+	// if still exists locally remove it
 	if localFileExists {
+		log.Println("REMOVING LOCAL FILE")
 		// safe guard against unwanted deletions
 		if path.RootPath() != m.Root || path.SubPath() == "" {
 			m.warn("trying to remove illegal path, will ignore!", path.FullPath())
 			return nil
 		}
-		// remove file
+		// remove file (removedir should already exist, so nothing else to do)
 		err := os.Remove(path.FullPath())
 		if err != nil {
 			m.log("couldn't remove file", path.FullPath())
 			return err
 		}
-		// apply local deletion
-		err = m.localRemove(path)
-		if err != nil {
-			m.log("local remove didn't work:", err.Error())
-			return err
-		}
+	}
+	// sanity check that removedir exists
+	if !m.isRemoved(remoteObject.Identification) {
+		m.warn("remote file removed but removedir doesn't exist!")
+		return shared.ErrIllegalFileState
+	}
+	log.Println("UPDATING PEERS")
+	// since remote removal --> write peer to done
+	err := m.updateRemovalDir(remoteObject.Identification)
+	if err != nil {
+		m.log("updating removal dir failed!")
+		return err
 	}
 	// if we get a removal from another peer that peer seen the deletion, but we'll be notified by the create method, so nothing to do here
 	return nil
@@ -662,6 +675,8 @@ func (m *Model) compareMaps(scope string, current map[string]bool) ([]string, []
 /*
 checkRemove checks whether a remove can be finally applied and purged from the
 model dependent on the peers in done and check.
+
+TODO check for orphans and warn?
 */
 func (m *Model) checkRemove() error {
 	removeDir := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR
@@ -687,6 +702,7 @@ func (m *Model) checkRemove() error {
 			}
 		}
 		if complete {
+			log.Println("WE ARE REMOVING THE REMOVAL; SEEMS APPLIED...")
 			err := m.directRemove(shared.CreatePathRoot(m.Root).Apply(objRemovePath))
 			if err != nil {
 				m.log("Failed to direct remove!")
@@ -702,6 +718,7 @@ localRemove initiates a deletion locally, creating all necessary files and
 removing the file from the model.
 */
 func (m *Model) localRemove(path *shared.RelativePath) error {
+	log.Println("LOCALREMOVE", path.SubPath())
 	removeDirectory := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR
 	// get stin for notify
 	stin, exists := m.StaticInfos[path.SubPath()]
@@ -726,29 +743,10 @@ func (m *Model) localRemove(path *shared.RelativePath) error {
 		m.log("making removedir error")
 		return err
 	}
-	// write peer list to check which must all be notified of removal
-	peers, err := m.readPeers()
+	// write peers
+	err = m.updateRemovalDir(stin.Identification)
 	if err != nil {
-		m.log("Failed to read peers")
-		return err
-	}
-	for _, peer := range peers {
-		err = ioutil.WriteFile(removeDirectory+"/"+stin.Identification+"/"+shared.REMOVECHECKDIR+"/"+peer, []byte(""), shared.FILEPERMISSIONMODE)
-		if err != nil {
-			m.log("Couldn't write peer file", peer, "to check!")
-			return err
-		}
-	}
-	// write own peer file also to done dir as removal already applied locally
-	err = ioutil.WriteFile(removeDirectory+"/"+stin.Identification+"/"+shared.REMOVEDONEDIR+"/"+m.SelfID, []byte(""), shared.FILEPERMISSIONMODE)
-	if err != nil {
-		m.log("Couldn't write own peer file to done!")
-		return err
-	}
-	// make sure deletion is caught
-	err = m.PartialUpdate(removeDirectory)
-	if err != nil {
-		m.log("Error partial updating!")
+		m.log("failed to update removal dir for", stin.Identification)
 		return err
 	}
 	// send notify
@@ -759,6 +757,55 @@ func (m *Model) localRemove(path *shared.RelativePath) error {
 		Version:        stin.Version,
 		Directory:      stin.Directory}
 	m.notify(shared.OpRemove, path, notifyObj)
+	return nil
+}
+
+/*
+updateRemovalDir is an internal function that writes all known peers to check
+and the own peer to done, if not already existing.
+*/
+func (m *Model) updateRemovalDir(identification string) error {
+	log.Println("UPDATEREMOVALDIR")
+	removeDirectory := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR + "/" + identification
+	// write peer list to check which must all be notified of removal
+	peers, err := m.readPeers()
+	if err != nil {
+		m.log("Failed to read peers")
+		return err
+	}
+	for _, peer := range peers {
+		path := removeDirectory + "/" + shared.REMOVECHECKDIR + "/" + peer
+		// if already written don't rewrite
+		if shared.FileExists(path) {
+			log.Println("OK; ALREADY EXISTS")
+			continue
+		}
+		err = ioutil.WriteFile(path, []byte(""), shared.FILEPERMISSIONMODE)
+		if err != nil {
+			m.log("Couldn't write peer file", peer, "to check!")
+			return err
+		}
+	}
+	path := removeDirectory + "/" + shared.REMOVEDONEDIR + "/" + m.SelfID
+	// if already written don't rewrite
+	if !shared.FileExists(path) {
+		// write own peer file also to done dir as removal already applied locally
+		err = ioutil.WriteFile(path, []byte(""), shared.FILEPERMISSIONMODE)
+		if err != nil {
+			m.log("Couldn't write own peer file to done!")
+			return err
+		}
+	} else {
+		log.Println("OK: WE'VE ALREADY DELETED THIS")
+	}
+	// make sure updates are caught if any
+	log.Println("START PARTIAL UPDATE")
+	err = m.PartialUpdate(removeDirectory)
+	if err != nil {
+		m.log("Error partial updating!")
+		return err
+	}
+	log.Println("FINISHED PARTIAL UPDATE")
 	return nil
 }
 
