@@ -324,6 +324,17 @@ func (m *Model) GetIdentification(path *shared.RelativePath) (string, error) {
 }
 
 /*
+GetInfoFrom takes an identification and returns the corresponding shared.ObjectInfo.
+*/
+func (m *Model) GetInfoFrom(identification string) (*shared.ObjectInfo, error) {
+	subpath, err := m.FilePath(identification)
+	if err != nil {
+		return nil, err
+	}
+	return m.GetInfo(shared.CreatePath(m.Root, subpath))
+}
+
+/*
 GetInfo creates the Objectinfo for the given path, so long as the path is
 contained in m.Tracked. Directories are NOT traversed!
 */
