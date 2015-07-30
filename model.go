@@ -301,12 +301,12 @@ func (m *Model) Store() error {
 }
 
 /*
-FilePath returns the full path of whatever object satisfies the identification.
+GetSubPath returns the sub path of whatever object satisfies the identification.
 */
-func (m *Model) FilePath(identification string) (string, error) {
+func (m *Model) GetSubPath(identification string) (string, error) {
 	for path, stin := range m.StaticInfos {
 		if stin.Identification == identification {
-			return m.Root + "/" + path, nil
+			return path, nil
 		}
 	}
 	return "", errors.New("corresponding file for id <" + identification + "> not found")
@@ -327,7 +327,7 @@ func (m *Model) GetIdentification(path *shared.RelativePath) (string, error) {
 GetInfoFrom takes an identification and returns the corresponding shared.ObjectInfo.
 */
 func (m *Model) GetInfoFrom(identification string) (*shared.ObjectInfo, error) {
-	subpath, err := m.FilePath(identification)
+	subpath, err := m.GetSubPath(identification)
 	if err != nil {
 		return nil, err
 	}
@@ -341,13 +341,13 @@ contained in m.Tracked. Directories are NOT traversed!
 func (m *Model) GetInfo(path *shared.RelativePath) (*shared.ObjectInfo, error) {
 	_, exists := m.TrackedPaths[path.SubPath()]
 	if !exists {
-		log.Printf("Error: %s\n", path.FullPath())
+		log.Println("GetInfo: path not tracked!", path.SubPath())
 		return nil, shared.ErrUntracked
 	}
 	// get staticinfo
 	stin, exists := m.StaticInfos[path.SubPath()]
 	if !exists {
-		log.Printf("Error: %s\n", path.FullPath())
+		log.Println("GetInfo: stin not tracked!", path.SubPath())
 		return nil, shared.ErrUntracked
 	}
 	stat, err := os.Lstat(path.FullPath())
