@@ -466,7 +466,7 @@ func (m *Model) ApplyCreate(path *shared.RelativePath, remoteObject *shared.Obje
 	m.TrackedPaths[path.SubPath()] = true
 	m.StaticInfos[path.SubPath()] = *stin
 	localObj, _ := m.GetInfo(path)
-	m.notify(shared.OpCreate, path, localObj)
+	m.notify(shared.OpCreate, localObj)
 	return nil
 }
 
@@ -538,7 +538,7 @@ func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.Obje
 	// apply updated
 	m.StaticInfos[path.SubPath()] = stin
 	localObj, _ := m.GetInfo(path)
-	m.notify(shared.OpModify, path, localObj)
+	m.notify(shared.OpModify, localObj)
 	return nil
 }
 
@@ -546,7 +546,6 @@ func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.Obje
 ApplyRemove applies a remove operation.
 */
 func (m *Model) ApplyRemove(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
-	_ = "breakpoint"
 	remoteRemove := remoteObject != nil
 	localFileExists := shared.FileExists(path.FullPath())
 	// check that deletion logic is sane (don't want to create deletion on deletion)
@@ -559,10 +558,8 @@ func (m *Model) ApplyRemove(path *shared.RelativePath, remoteObject *shared.Obje
 		// if not a remote remove the deletion must be applied locally
 		return m.localRemove(path)
 	}
-	log.Println("REMOTE REMOVE")
 	// if still exists locally remove it
 	if localFileExists {
-		log.Println("REMOVING LOCAL FILE")
 		// safe guard against unwanted deletions
 		if path.RootPath() != m.Root || path.SubPath() == "" {
 			m.warn("trying to remove illegal path, will ignore!", path.FullPath())
@@ -580,7 +577,6 @@ func (m *Model) ApplyRemove(path *shared.RelativePath, remoteObject *shared.Obje
 		m.warn("remote file removed but removedir doesn't exist!")
 		return shared.ErrIllegalFileState
 	}
-	log.Println("UPDATING PEERS")
 	// since remote removal --> write peer to done
 	err := m.updateRemovalDir(remoteObject.Identification)
 	if err != nil {
@@ -703,7 +699,6 @@ func (m *Model) checkRemove() error {
 			}
 		}
 		if complete {
-			log.Println("WE ARE REMOVING THE REMOVAL; SEEMS APPLIED...")
 			err := m.directRemove(shared.CreatePathRoot(m.Root).Apply(objRemovePath))
 			if err != nil {
 				m.log("Failed to direct remove!")
@@ -719,7 +714,6 @@ localRemove initiates a deletion locally, creating all necessary files and
 removing the file from the model.
 */
 func (m *Model) localRemove(path *shared.RelativePath) error {
-	log.Println("LOCALREMOVE", path.SubPath())
 	removeDirectory := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR
 	// get stin for notify
 	stin, exists := m.StaticInfos[path.SubPath()]
@@ -751,14 +745,14 @@ func (m *Model) localRemove(path *shared.RelativePath) error {
 		return err
 	}
 	// send notify
-	log.Println("THIS PATH IS WRONG ON RECEIVER:", path.FullPath())
 	notifyObj := &shared.ObjectInfo{
 		Identification: stin.Identification,
 		Name:           path.LastElement(),
+		Path:           path.SubPath(),
 		Content:        stin.Content,
 		Version:        stin.Version,
 		Directory:      stin.Directory}
-	m.notify(shared.OpRemove, path, notifyObj)
+	m.notify(shared.OpRemove, notifyObj)
 	return nil
 }
 
@@ -767,7 +761,6 @@ updateRemovalDir is an internal function that writes all known peers to check
 and the own peer to done, if not already existing.
 */
 func (m *Model) updateRemovalDir(identification string) error {
-	log.Println("UPDATEREMOVALDIR")
 	removeDirectory := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR + "/" + identification
 	// write peer list to check which must all be notified of removal
 	peers, err := m.readPeers()
@@ -779,7 +772,6 @@ func (m *Model) updateRemovalDir(identification string) error {
 		path := removeDirectory + "/" + shared.REMOVECHECKDIR + "/" + peer
 		// if already written don't rewrite
 		if shared.FileExists(path) {
-			log.Println("OK; ALREADY EXISTS")
 			continue
 		}
 		err = ioutil.WriteFile(path, []byte(""), shared.FILEPERMISSIONMODE)
@@ -801,13 +793,11 @@ func (m *Model) updateRemovalDir(identification string) error {
 		log.Println("OK: WE'VE ALREADY DELETED THIS")
 	}
 	// make sure updates are caught if any
-	log.Println("START PARTIAL UPDATE")
 	err = m.PartialUpdate(removeDirectory)
 	if err != nil {
 		m.log("Error partial updating!")
 		return err
 	}
-	log.Println("FINISHED PARTIAL UPDATE")
 	return nil
 }
 
@@ -902,8 +892,12 @@ func (m *Model) applyFile(identification string, path string) error {
 /*
 Notify the channel of the operation for the object at path.
 */
-func (m *Model) notify(op shared.Operation, path *shared.RelativePath, obj *shared.ObjectInfo) {
-	log.Printf("%s: %s\n", op, path.LastElement())
+func (m *Model) notify(op shared.Operation, obj *shared.ObjectInfo) {
+	if obj == nil || obj.Path == "" {
+		m.warn("notify: called with invalid obj!")
+		return
+	}
+	log.Printf("%s: %s\n", op, obj.Name)
 	if m.updatechan != nil {
 		if obj == nil {
 			m.log("Failed to notify due to nil obj!")
