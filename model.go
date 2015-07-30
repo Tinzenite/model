@@ -93,8 +93,6 @@ UpdateMessages required to update the current model to the foreign model. These
 must still be applied!
 */
 func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, error) {
-	/*TODO make sure that the .TINZENITEDIR is compatible! */
-	log.Println("SycnModel: WARNING no check if compatible model yet!")
 	// we'll need the simple lists of the foreign model for both cases
 	foreignPaths := make(map[string]bool)
 	foreignObjs := make(map[string]*shared.ObjectInfo)
@@ -105,6 +103,22 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 		obj.Objects = nil
 		foreignObjs[obj.Path] = &obj
 	})
+	// make sure that the .TINZENITEDIR is compatible!
+	authPath := shared.TINZENITEDIR + "/" + shared.ORGDIR + "/" + shared.AUTHJSON
+	foreignAuth, exists := foreignObjs[authPath]
+	if !exists {
+		log.Println("SyncModel: auth doesn't exist in foreign model!")
+		return nil, shared.ErrIllegalFileState
+	}
+	localAuth, err := m.GetInfo(shared.CreatePath(m.Root, authPath))
+	if err != nil {
+		log.Println("SyncModel: local model doesn't have auth!")
+		return nil, shared.ErrIllegalFileState
+	}
+	if foreignAuth.Content != localAuth.Content {
+		log.Println("SyncModel: models seem to be incompatible!")
+		return nil, errIncompatibleModel
+	}
 	// compare to local version
 	created, modified, removed := m.compareMaps(m.Root, foreignPaths)
 	// build update messages
@@ -202,9 +216,24 @@ func (m *Model) BootstrapModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage
 }
 
 /*
+HasUpdate checks whether the update has already been applied locally. Used to
+avoid getting updates that originated from us.
+*/
+func (m *Model) HasUpdate(um *shared.UpdateMessage) bool {
+	// get local version
+	stin, exists := m.StaticInfos[um.Object.Path]
+	if !exists {
+		return false
+	}
+	return stin.Version.Equal(um.Object.Version)
+}
+
+/*
 SyncObject returns an UpdateMessage of the change we may need to apply if
 applicable. May return nil, that means that the update must not be applied (for
 example if the object has not changed).
+
+TODO: am I using this somewhere? IF NOT WHY NOT?
 */
 func (m *Model) SyncObject(obj *shared.ObjectInfo) (*shared.UpdateMessage, error) {
 	// we'll need the local path so create that up front
