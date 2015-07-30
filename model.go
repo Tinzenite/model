@@ -546,6 +546,7 @@ func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.Obje
 ApplyRemove applies a remove operation.
 */
 func (m *Model) ApplyRemove(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
+	_ = "breakpoint"
 	remoteRemove := remoteObject != nil
 	localFileExists := shared.FileExists(path.FullPath())
 	// check that deletion logic is sane (don't want to create deletion on deletion)
@@ -750,6 +751,7 @@ func (m *Model) localRemove(path *shared.RelativePath) error {
 		return err
 	}
 	// send notify
+	log.Println("THIS PATH IS WRONG ON RECEIVER:", path.FullPath())
 	notifyObj := &shared.ObjectInfo{
 		Identification: stin.Identification,
 		Name:           path.LastElement(),
