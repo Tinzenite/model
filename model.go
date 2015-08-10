@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/tinzenite/shared"
 )
@@ -705,6 +706,12 @@ func (m *Model) checkRemove() error {
 				m.log("Failed to direct remove!")
 				return err
 			}
+		}
+		// warn of possible orphans
+		if time.Since(stat.ModTime()) > removalTimeout {
+			m.warn("Removal may be orphaned! ", stat.Name())
+			/*TODO this may be called even if it has just been removed... do better logic!
+			Also: is there something we can do in this case?*/
 		}
 	}
 	return nil

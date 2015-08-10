@@ -1,6 +1,9 @@
 package model
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 var (
 	errMismatch          = errors.New("mismatch in structs")
@@ -10,3 +13,9 @@ var (
 )
 
 var tag = "Model:"
+
+/*
+removalTimeout is the timeout after which removals are considered orphaned and
+Model will warn of them.
+*/
+const removalTimeout = 24 * time.Hour
