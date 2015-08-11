@@ -562,20 +562,23 @@ func (m *Model) ApplyRemove(path *shared.RelativePath, remoteObject *shared.Obje
 		m.warn("removedir objects should not leak with removal!")
 		return nil
 	}
+	// safe guard against unwanted deletions
+	if path.RootPath() != m.Root || path.SubPath() == "" {
+		m.warn("trying to remove illegal path, will ignore!", path.FullPath())
+		return nil
+	}
 	// if locally initiated, just apply
 	if !remoteRemove {
+		log.Println("EXECUTING LOCAL REMOVAL!")
 		// if not a remote remove the deletion must be applied locally
 		return m.localRemove(path)
 	}
+	log.Println("EXECUTING REMOTE REMOVAL!")
 	// if still exists locally remove it
 	if localFileExists {
-		// safe guard against unwanted deletions
-		if path.RootPath() != m.Root || path.SubPath() == "" {
-			m.warn("trying to remove illegal path, will ignore!", path.FullPath())
-			return nil
-		}
+		log.Println("REMOVING LOCAL FILE!")
 		// remove file (removedir should already exist, so nothing else to do)
-		err := os.Remove(path.FullPath())
+		err := m.directRemove(path)
 		if err != nil {
 			m.log("couldn't remove file", path.FullPath())
 			return err
@@ -698,6 +701,7 @@ func (m *Model) checkRemove() error {
 		err := m.writeRemovalDir(stat.Name())
 		if err != nil {
 			log.Println("DEBUG: updating removal dir failed on checkRemove!", err)
+			/*TODO: this fails because the dir is created AFTERWARDS – why and how do I fix this? NOTE: TAMINO TODO*/
 		}
 		// working directory
 		objRemovePath := removeDir + "/" + stat.Name()
@@ -717,12 +721,15 @@ func (m *Model) checkRemove() error {
 			}
 		}
 		if complete {
-			log.Println("DEBUG: Removing removal!")
-			err := m.directRemove(shared.CreatePathRoot(m.Root).Apply(objRemovePath))
-			if err != nil {
-				m.log("Failed to direct remove!")
-				return err
-			}
+			log.Println("DEBUG: Removing removal! (NOT)")
+			/*
+				TODO: for some reason the removal is purged before being remotely updated! NOTE: TAMINO TODO
+					err := m.directRemove(shared.CreatePathRoot(m.Root).Apply(objRemovePath))
+					if err != nil {
+						m.log("Failed to direct remove!")
+						return err
+					}
+			*/
 		}
 		// warn of possible orphans
 		if time.Since(stat.ModTime()) > removalTimeout {
@@ -739,6 +746,7 @@ localRemove initiates a deletion locally, creating all necessary files and
 removing the file from the model.
 */
 func (m *Model) localRemove(path *shared.RelativePath) error {
+	log.Println("LOCAL REMOVE")
 	// get stin for notify
 	stin, exists := m.StaticInfos[path.SubPath()]
 	if !exists {
@@ -761,6 +769,12 @@ func (m *Model) localRemove(path *shared.RelativePath) error {
 	if err != nil {
 		m.log("failed to update removal dir for", stin.Identification)
 		return err
+	}
+	/*TODO update removal dir here so that creations etc are sent before notify below!
+	NOTE: TAMINO DO THIS NEXT!*/
+	err = m.PartialUpdate(m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR)
+	if err != nil {
+		log.Println("PARTIALUPDATEERROR:", err)
 	}
 	// send notify
 	notifyObj := &shared.ObjectInfo{
@@ -813,7 +827,7 @@ func (m *Model) writeRemovalDir(identification string) error {
 		// write own peer file also to done dir as removal already applied locally
 		err = ioutil.WriteFile(path, []byte(""), shared.FILEPERMISSIONMODE)
 		if err != nil {
-			m.log("Couldn't write own peer file to done!")
+			m.log("Couldn't write own peer file to done!", err.Error())
 			return err
 		}
 	} else {
@@ -839,6 +853,7 @@ func (m *Model) directRemove(path *shared.RelativePath) error {
 		relPath := path.Apply(obj)
 		// if it still exists --> remove
 		if shared.FileExists(relPath.FullPath()) {
+			log.Println("FUCKING DELETING IT!", relPath.FullPath())
 			err := os.RemoveAll(relPath.FullPath())
 			if err != nil {
 				m.log("directRemove failed to remove the file itself!")
