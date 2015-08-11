@@ -128,7 +128,11 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 	// build update messages
 	var umList []*shared.UpdateMessage
 	for _, subpath := range created {
-		remObj := foreignObjs[subpath]
+		remObj, exists := foreignObjs[subpath]
+		if !exists {
+			m.warn("Created path", subpath, "doesn't exist in remote model!")
+			continue
+		}
 		um := shared.CreateUpdateMessage(shared.OpCreate, *remObj)
 		umList = append(umList, &um)
 	}
@@ -138,7 +142,11 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 			m.log("SyncModel: failed to fetch local obj for modify check!")
 			continue
 		}
-		remObj := foreignObjs[subpath]
+		remObj, exists := foreignObjs[subpath]
+		if !exists {
+			m.warn("Modified path", subpath, "doesn't exist in remote model!")
+			continue
+		}
 		// check if same – if not some modify has happened
 		if !localObj.Equal(remObj) {
 			um := shared.CreateUpdateMessage(shared.OpModify, *remObj)
@@ -146,7 +154,6 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 		}
 	}
 	for _, subpath := range removed {
-		remObj := foreignObjs[subpath]
 		localObj, err := m.GetInfo(shared.CreatePath(m.Root, subpath))
 		if err != nil {
 			m.log("SyncModel: failed to fetch local obj for remove check!")
@@ -154,7 +161,8 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 		}
 		// this works because the deletion files will already have been created, but the removal not applied to the local model yet
 		if m.isRemoved(localObj.Identification) {
-			um := shared.CreateUpdateMessage(shared.OpRemove, *remObj)
+			// NOTE: we use localObj here because remote object won't exist since we need to remove it locally
+			um := shared.CreateUpdateMessage(shared.OpRemove, *localObj)
 			umList = append(umList, &um)
 		}
 	}
@@ -580,7 +588,7 @@ func (m *Model) ApplyRemove(path *shared.RelativePath, remoteObject *shared.Obje
 		return m.localRemove(path)
 	}
 	// since remote removal --> write peer to done
-	err := m.UpdateRemovalDir(remoteObject.Identification)
+	err := m.writeRemovalDir(remoteObject.Identification)
 	if err != nil {
 		m.log("updating removal dir failed!")
 		return err
@@ -686,7 +694,14 @@ func (m *Model) checkRemove() error {
 	}
 	// check for each removal
 	for _, stat := range allRemovals {
+		// update removal stats
+		err := m.writeRemovalDir(stat.Name())
+		if err != nil {
+			log.Println("DEBUG: updating removal dir failed on checkRemove!", err)
+		}
+		// working directory
 		objRemovePath := removeDir + "/" + stat.Name()
+		// read all peers to check for
 		allCheck, err := ioutil.ReadDir(objRemovePath + "/" + shared.REMOVECHECKDIR)
 		if err != nil {
 			m.log("Failed reading check peer list!")
@@ -696,11 +711,13 @@ func (m *Model) checkRemove() error {
 		complete := true
 		for _, peerStat := range allCheck {
 			if !shared.FileExists(objRemovePath + "/" + shared.REMOVEDONEDIR + "/" + peerStat.Name()) {
+				log.Println("DEBUG: missing", peerStat.Name(), "to complete removal!")
 				complete = false
 				break
 			}
 		}
 		if complete {
+			log.Println("DEBUG: Removing removal!")
 			err := m.directRemove(shared.CreatePathRoot(m.Root).Apply(objRemovePath))
 			if err != nil {
 				m.log("Failed to direct remove!")
@@ -740,7 +757,7 @@ func (m *Model) localRemove(path *shared.RelativePath) error {
 		return err
 	}
 	// write peers
-	err = m.UpdateRemovalDir(stin.Identification)
+	err = m.writeRemovalDir(stin.Identification)
 	if err != nil {
 		m.log("failed to update removal dir for", stin.Identification)
 		return err
@@ -758,10 +775,11 @@ func (m *Model) localRemove(path *shared.RelativePath) error {
 }
 
 /*
-UpdateRemovalDir is an internal function that writes all known peers to check
-and the own peer to done, if not already existing.
+writeRemovalDir is an internal function that writes all known peers to check
+and the own peer to done, if not already existing. NOTE: will not update the
+model to avoid recursion: this must be done manually.
 */
-func (m *Model) UpdateRemovalDir(identification string) error {
+func (m *Model) writeRemovalDir(identification string) error {
 	removeDirectory := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR + "/" + identification
 	// make directories if don't exist
 	if !shared.FileExists(removeDirectory) {
@@ -800,12 +818,6 @@ func (m *Model) UpdateRemovalDir(identification string) error {
 		}
 	} else {
 		log.Println("OK: WE'VE ALREADY DELETED THIS")
-	}
-	// make sure updates are caught if any
-	err = m.PartialUpdate(removeDirectory)
-	if err != nil {
-		m.log("Error partial updating!")
-		return err
 	}
 	return nil
 }
