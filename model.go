@@ -430,6 +430,10 @@ exists. NOTE: In the case of a file, requires the object to exist in the TEMPDIR
 named as the object indentification.
 */
 func (m *Model) ApplyCreate(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
+	// ensure parents exists so that create is not "hanging" object
+	if !m.parentsExist(path) {
+		return errParentObjectsMissing
+	}
 	// ensure no file has been written already
 	localCreate := shared.FileExists(path.FullPath())
 	// sanity check if the object already exists locally
@@ -923,6 +927,21 @@ isRemoved checks whether a file is due for deletion.
 */
 func (m *Model) isRemoved(identification string) bool {
 	return shared.FileExists(m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR + "/" + identification)
+}
+
+/*
+parentsExist takes the path and ensures that each parent object exists in the.
+If this is not the case it returns false.
+*/
+func (m *Model) parentsExist(path *shared.RelativePath) bool {
+	for !path.AtRoot() {
+		path = path.Up()
+		_, exists := m.TrackedPaths[path.SubPath()]
+		if !exists {
+			return false
+		}
+	}
+	return true
 }
 
 /*
