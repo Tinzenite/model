@@ -538,7 +538,8 @@ func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.Obje
 				return err
 			}
 		} else {
-			/*TODO can this happen for directories? Only once move is implemented, right?*/
+			/*TODO can this happen for directories? Only once move is implemented, right?
+			Update: it can. Why?*/
 			m.warn("modify not implemented for directories!")
 		}
 	} else {
@@ -579,7 +580,6 @@ func (m *Model) ApplyRemove(path *shared.RelativePath, remoteObject *shared.Obje
 	}
 	// if locally initiated, just apply
 	if !remoteRemove {
-		log.Println("EXECUTING LOCAL REMOVAL!")
 		// if not a remote remove the deletion must be applied locally
 		return m.localRemove(path)
 	}
@@ -673,6 +673,7 @@ checkRemove checks whether a remove can be finally applied and purged from the
 model dependent on the peers in done and check.
 
 TODO check for orphans and warn? Check for removals that haven't been applied?
+NOTE: this method still requires some work!
 */
 func (m *Model) checkRemove() error {
 	removeDir := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR
@@ -707,15 +708,12 @@ func (m *Model) checkRemove() error {
 			}
 		}
 		if complete {
-			log.Println("DEBUG: Removing removal! (NOT)")
-			/*
-				TODO: for some reason the removal is purged before being remotely updated! NOTE: TAMINO TODO
-					err := m.directRemove(shared.CreatePathRoot(m.Root).Apply(objRemovePath))
-					if err != nil {
-						m.log("Failed to direct remove!")
-						return err
-					}
-			*/
+			// TODO: for some reason the removal is purged before being remotely updated! NOTE: TAMINO TODO
+			err := m.directRemove(shared.CreatePathRoot(m.Root).Apply(objRemovePath))
+			if err != nil {
+				m.log("Failed to direct remove!")
+				return err
+			}
 		}
 		// warn of possible orphans
 		if time.Since(stat.ModTime()) > removalTimeout {
@@ -782,10 +780,8 @@ func (m *Model) remoteRemove(path *shared.RelativePath, remoteObject *shared.Obj
 		return errors.New("NIL REMOTE OBJECT; NOT ALLOWED")
 	}
 	localFileExists := shared.FileExists(path.FullPath())
-	log.Println("EXECUTING REMOTE REMOVAL!")
 	// if still exists locally remove it
 	if localFileExists {
-		log.Println("REMOVING LOCAL FILE!", path.FullPath())
 		// remove file (removedir should already exist, so nothing else to do)
 		err := m.directRemove(path)
 		if err != nil {
@@ -871,7 +867,6 @@ func (m *Model) directRemove(path *shared.RelativePath) error {
 	// iterate over each path
 	for obj := range objList {
 		relPath := path.Apply(obj)
-		log.Println("DIRECT REMOVE:", relPath.FullPath())
 		// if it still exists --> remove
 		if shared.FileExists(relPath.FullPath()) {
 			err := os.RemoveAll(relPath.FullPath())
