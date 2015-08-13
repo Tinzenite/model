@@ -425,6 +425,20 @@ func (m *Model) FillInfo(root *shared.ObjectInfo, all []*shared.ObjectInfo) *sha
 }
 
 /*
+IsEmpty returns true if the model is empty SAVE for the .tinzenite files.
+*/
+func (m *Model) IsEmpty() bool {
+	// we could do some cool stuff on m.Tracked etc, but...
+	count, err := shared.CountFiles(m.Root)
+	if err != nil {
+		m.log("IsEmpty:", err.Error())
+		return false
+	}
+	// ...just check whether root contains one dir and it is the TINZENITEDIR
+	return count == 1 && shared.FileExists(m.Root+"/"+shared.TINZENITEDIR)
+}
+
+/*
 ApplyCreate applies a create operation to the local model given that the file
 exists. NOTE: In the case of a file, requires the object to exist in the TEMPDIR
 named as the object indentification.
@@ -560,6 +574,11 @@ func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.Obje
 	if err != nil {
 		return err
 	}
+	// TODO: DEBUG
+	if stin.Directory {
+		log.Println("Directory modified!?")
+		_ = "breakpoint"
+	}
 	// apply updated
 	m.StaticInfos[path.SubPath()] = stin
 	localObj, _ := m.GetInfo(path)
@@ -588,20 +607,6 @@ func (m *Model) ApplyRemove(path *shared.RelativePath, remoteObject *shared.Obje
 		return m.localRemove(path)
 	}
 	return m.remoteRemove(path, remoteObject)
-}
-
-/*
-IsEmpty returns true if the model is empty SAVE for the .tinzenite files.
-*/
-func (m *Model) IsEmpty() bool {
-	// we could do some cool stuff on m.Tracked etc, but...
-	count, err := shared.CountFiles(m.Root)
-	if err != nil {
-		m.log("IsEmpty:", err.Error())
-		return false
-	}
-	// ...just check whether root contains one dir and it is the TINZENITEDIR
-	return count == 1 && shared.FileExists(m.Root+"/"+shared.TINZENITEDIR)
 }
 
 /*
@@ -712,7 +717,6 @@ func (m *Model) checkRemove() error {
 			}
 		}
 		if complete {
-			// TODO: for some reason the removal is purged before being remotely updated! NOTE: TAMINO TODO
 			err := m.directRemove(shared.CreatePathRoot(m.Root).Apply(objRemovePath))
 			if err != nil {
 				m.log("Failed to direct remove!")
