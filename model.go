@@ -453,7 +453,7 @@ func (m *Model) ApplyCreate(path *shared.RelativePath, remoteObject *shared.Obje
 	// sanity check if the object already exists locally
 	_, ok := m.TrackedPaths[path.SubPath()]
 	if ok {
-		m.log("Object exists locally! Can not apply create!", path.FullPath())
+		// m.log("Object exists locally! Can not apply create!", path.FullPath())
 		return shared.ErrConflict
 	}
 	// NOTE: we don't explicitely check m.Objinfo because we'll just overwrite it if already exists
@@ -558,6 +558,7 @@ func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.Obje
 		} else {
 			/*TODO can this happen for directories? Only once move is implemented, right?
 			Update: it can. Why?*/
+			_ = "breakpoint"
 			m.warn("modify not implemented for directories!")
 		}
 	} else {
@@ -971,7 +972,7 @@ func (m *Model) notify(op shared.Operation, obj *shared.ObjectInfo) {
 		m.warn("notify: called with invalid obj!")
 		return
 	}
-	log.Printf("%s: %s\n", op, obj.Name)
+	log.Printf("Notify %s: %s\n", op, obj.Name)
 	if m.updatechan != nil {
 		if obj == nil {
 			m.log("Failed to notify due to nil obj!")
