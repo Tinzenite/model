@@ -699,6 +699,7 @@ func (m *Model) checkRemove() error {
 		if err != nil {
 			log.Println("DEBUG: updating removal dir failed on checkRemove!", err)
 			/*TODO: this fails because the dir is created AFTERWARDS – why and how do I fix this? NOTE: TAMINO TODO*/
+			return err
 		}
 		// working directory
 		objRemovePath := removeDir + "/" + stat.Name()
@@ -712,7 +713,6 @@ func (m *Model) checkRemove() error {
 		complete := true
 		for _, peerStat := range allCheck {
 			if !shared.FileExists(objRemovePath + "/" + shared.REMOVEDONEDIR + "/" + peerStat.Name()) {
-				log.Println("DEBUG: missing", peerStat.Name(), "to complete removal!")
 				complete = false
 				break
 			}
