@@ -166,7 +166,8 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 			umList = append(umList, &um)
 		}
 	}
-	return umList, nil
+	// sort so that dirs are listed before their contents
+	return m.sortUpdateMessages(umList), nil
 }
 
 /*
@@ -224,7 +225,8 @@ func (m *Model) BootstrapModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage
 		}
 	}
 	// done: we return all updates that we could not manually merge into our own model
-	return umList, nil
+	// sort so that dirs are listed before their contents
+	return m.sortUpdateMessages(umList), nil
 }
 
 /*
@@ -1026,6 +1028,16 @@ func (m *Model) partialPopulateMap(rootPath string) (map[string]bool, error) {
 	// doesn't directly assign to m.tracked on purpose so that we can reuse this
 	// method elsewhere (for the current structure on m.Update())
 	return tracked, nil
+}
+
+/*
+sortObjects sorts an array of ObjectInfo by the path length. This ensures that
+all updates will be sent in the correct order.
+*/
+func (m *Model) sortUpdateMessages(list []*shared.UpdateMessage) []*shared.UpdateMessage {
+	sortable := shared.SortableUpdateMessage(list)
+	sort.Sort(sortable)
+	return []*shared.UpdateMessage(sortable)
 }
 
 /*
