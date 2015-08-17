@@ -560,7 +560,6 @@ func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.Obje
 		} else {
 			/*TODO can this happen for directories? Only once move is implemented, right?
 			Update: it can. Why?*/
-			_ = "breakpoint"
 			m.warn("modify not implemented for directories!")
 		}
 	} else {
@@ -580,7 +579,6 @@ func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.Obje
 	// TODO: DEBUG
 	if stin.Directory {
 		log.Println("Directory modified!?")
-		_ = "breakpoint"
 	}
 	// apply updated
 	m.StaticInfos[path.SubPath()] = stin
@@ -975,12 +973,13 @@ func (m *Model) notify(op shared.Operation, obj *shared.ObjectInfo) {
 		m.warn("notify: called with invalid obj!")
 		return
 	}
-	log.Printf("Notify %s: %s\n", op, obj.Name)
 	if m.updatechan != nil {
 		if obj == nil {
 			m.log("Failed to notify due to nil obj!")
 			return
 		}
+		//TODO remove this once we're done with model stuff, should if at all be in tinzenite itself!
+		log.Printf("Notify %s: %s\n", op, obj.Name)
 		m.updatechan <- shared.CreateUpdateMessage(op, *obj)
 	}
 }
