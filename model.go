@@ -677,7 +677,8 @@ func (m *Model) compareMaps(scope string, current map[string]bool) ([]string, []
 		}
 		created = append(created, subpath)
 	}
-	return created, modified, removed
+	// it is important to return these sorted: create dirs before their contents for example
+	return m.sortPaths(created), m.sortPaths(modified), m.sortPaths(removed)
 }
 
 /*
@@ -1038,6 +1039,16 @@ func (m *Model) sortUpdateMessages(list []*shared.UpdateMessage) []*shared.Updat
 	sortable := shared.SortableUpdateMessage(list)
 	sort.Sort(sortable)
 	return []*shared.UpdateMessage(sortable)
+}
+
+/*
+sortPaths sorts an array of strings representing paths by length. This ensures
+that directories will always be handled before their contents.
+*/
+func (m *Model) sortPaths(list []string) []string {
+	sortable := shared.SortableString(list)
+	sort.Sort(sortable)
+	return []string(sortable)
 }
 
 /*
