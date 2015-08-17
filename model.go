@@ -971,7 +971,7 @@ func (m *Model) applyFile(identification string, path string) error {
 Notify the channel of the operation for the object at path.
 */
 func (m *Model) notify(op shared.Operation, obj *shared.ObjectInfo) {
-	if obj == nil || obj.Path == "" {
+	if obj == nil {
 		m.warn("notify: called with invalid obj!")
 		return
 	}
