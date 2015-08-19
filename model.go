@@ -430,14 +430,13 @@ func (m *Model) FillInfo(root *shared.ObjectInfo, all []*shared.ObjectInfo) *sha
 IsEmpty returns true if the model is empty SAVE for the .tinzenite files.
 */
 func (m *Model) IsEmpty() bool {
-	// we could do some cool stuff on m.Tracked etc, but...
-	count, err := shared.CountFiles(m.Root)
-	if err != nil {
-		m.log("IsEmpty:", err.Error())
-		return false
+	// basically if model has any files apart from those in the .tinzenite dir, it is not empty
+	for subpath := range m.TrackedPaths {
+		if !strings.HasPrefix(subpath, shared.TINZENITEDIR) {
+			return false
+		}
 	}
-	// ...just check whether root contains one dir and it is the TINZENITEDIR
-	return count == 1 && shared.FileExists(m.Root+"/"+shared.TINZENITEDIR)
+	return true
 }
 
 /*
