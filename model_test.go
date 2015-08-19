@@ -32,7 +32,26 @@ func TestCreate(t *testing.T) {
 }
 
 func TestLoad(t *testing.T) {
-	t.SkipNow()
+	root := makeTempDirectory()
+	defer removeTempDirectory(root)
+	// must first create, update, and store a model so that we can load it
+	model, _ := Create(root, "peerid")
+	model.Update()
+	model.Store()
+	// load
+	loaded, err := Load(root)
+	if err != nil {
+		t.Log(err)
+	}
+	// sanity check
+	if loaded.IsEmpty() {
+		t.Log("Expected loaded to be non empty!")
+	}
+	// check with wrong parameter
+	_, err = Load("")
+	if err != shared.ErrIllegalParameters {
+		t.Error("Expected", shared.ErrIllegalParameters, "got", err)
+	}
 }
 
 func TestModel_IsEmpty(t *testing.T) {
