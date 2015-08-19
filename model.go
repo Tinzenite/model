@@ -28,44 +28,6 @@ type Model struct {
 }
 
 /*
-Create a new model at the specified path for the given peer id. Will not
-immediately update, must be explicitely called.
-*/
-func Create(root, peerid string) (*Model, error) {
-	if !shared.IsTinzenite(root) {
-		return nil, shared.ErrNotTinzenite
-	}
-	m := &Model{
-		Root:         root,
-		TrackedPaths: make(map[string]bool),
-		StaticInfos:  make(map[string]staticinfo),
-		SelfID:       peerid,
-		AllowLogging: true}
-	return m, nil
-}
-
-/*
-Load a model for the given path, depending whether a model.json exists for it
-already.
-*/
-func Load(root string) (*Model, error) {
-	if !shared.IsTinzenite(root) {
-		return nil, shared.ErrNotTinzenite
-	}
-	var m *Model
-	data, err := ioutil.ReadFile(root + "/" + shared.TINZENITEDIR + "/" + shared.LOCALDIR + "/" + shared.MODELJSON)
-	if err != nil {
-		return nil, err
-	}
-	// load as json
-	err = json.Unmarshal(data, &m)
-	if err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-/*
 Update the complete model state.
 */
 func (m *Model) Update() error {
@@ -167,7 +129,7 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 		}
 	}
 	// sort so that dirs are listed before their contents
-	return m.sortUpdateMessages(umList), nil
+	return sortUpdateMessages(umList), nil
 }
 
 /*
@@ -226,7 +188,7 @@ func (m *Model) BootstrapModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage
 	}
 	// done: we return all updates that we could not manually merge into our own model
 	// sort so that dirs are listed before their contents
-	return m.sortUpdateMessages(umList), nil
+	return sortUpdateMessages(umList), nil
 }
 
 /*
@@ -675,7 +637,7 @@ func (m *Model) compareMaps(scope string, current map[string]bool) ([]string, []
 		created = append(created, subpath)
 	}
 	// it is important to return these sorted: create dirs before their contents for example
-	return m.sortPaths(created), m.sortPaths(modified), m.sortPaths(removed)
+	return sortPaths(created), sortPaths(modified), sortPaths(removed)
 }
 
 /*
@@ -1027,26 +989,6 @@ func (m *Model) partialPopulateMap(rootPath string) (map[string]bool, error) {
 	// doesn't directly assign to m.tracked on purpose so that we can reuse this
 	// method elsewhere (for the current structure on m.Update())
 	return tracked, nil
-}
-
-/*
-sortObjects sorts an array of ObjectInfo by the path length. This ensures that
-all updates will be sent in the correct order.
-*/
-func (m *Model) sortUpdateMessages(list []*shared.UpdateMessage) []*shared.UpdateMessage {
-	sortable := shared.SortableUpdateMessage(list)
-	sort.Sort(sortable)
-	return []*shared.UpdateMessage(sortable)
-}
-
-/*
-sortPaths sorts an array of strings representing paths by length. This ensures
-that directories will always be handled before their contents.
-*/
-func (m *Model) sortPaths(list []string) []string {
-	sortable := shared.SortableString(list)
-	sort.Sort(sortable)
-	return []string(sortable)
 }
 
 /*
