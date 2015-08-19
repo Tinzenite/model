@@ -8,8 +8,6 @@ import (
 	"github.com/tinzenite/shared"
 )
 
-const PEERID = "testing"
-
 func TestCreate(t *testing.T) {
 	root := makeTempDirectory()
 	defer removeTempDirectory(root)
@@ -94,23 +92,41 @@ func TestModel_Update(t *testing.T) {
 	defer removeTempDirectory(root)
 	// create model
 	model, _ := Create(root, PEERID)
+	// test default update
 	err := model.Update()
 	if err != nil {
 		t.Error(err)
 	}
+	// test create update NOTE: EXAMPLE for now only, improve!
+	fileFour, _ := ioutil.TempFile(root, FOUR)
+	if model.IsTracked(fileFour.Name()) == true {
+		t.Error("Expected file to be untracked")
+	}
+	err = model.Update()
+	if err != nil {
+		t.Error(err)
+	}
+	if model.IsTracked(fileFour.Name()) == false {
+		t.Error("Expected file to be tracked")
+	}
 	// TODO complete. Must find a way of modifying single files so we can check
-	// if they are tracked then.
+	// if they are tracked then. Should I split for CREATE, MODIFY, and REMOVE?
 	t.Log("Incomplete test, TODO!")
 }
 
 // ------------------------- UTILITY FUNCTIONS ---------------------------------
 
+// PEERID is the peerid used for testing.
+const PEERID = "testing"
+
+// This are the names of the objects used for testing.
 const (
 	ROOT   = "root"
 	SUBDIR = "subdir"
 	ONE    = "one"
 	TWO    = "two"
 	THREE  = "three"
+	FOUR   = "four"
 )
 
 /*
