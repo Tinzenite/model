@@ -11,9 +11,23 @@ import (
 func TestCreate(t *testing.T) {
 	root := makeTempDirectory()
 	defer removeTempDirectory(root)
+	// test normal legal create
 	_, err := Create(root, "peerid")
 	if err != nil {
 		t.Error(err)
+	}
+	// test illegal parameters
+	_, err = Create(root, "")
+	if err != shared.ErrIllegalParameters {
+		t.Error("Expected", shared.ErrIllegalParameters, "got", err)
+	}
+	_, err = Create("", "peerid")
+	if err != shared.ErrIllegalParameters {
+		t.Error("Expected", shared.ErrIllegalParameters, "got", err)
+	}
+	_, err = Create("", "")
+	if err != shared.ErrIllegalParameters {
+		t.Error("Expected", shared.ErrIllegalParameters, "got", err)
 	}
 }
 
