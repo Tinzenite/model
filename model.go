@@ -402,6 +402,16 @@ func (m *Model) IsEmpty() bool {
 }
 
 /*
+IsTracked returns true if the given path is tracked by this model.
+*/
+func (m *Model) IsTracked(path string) bool {
+	relPath := shared.CreatePathRoot(m.Root).Apply(path)
+	_, pathExists := m.TrackedPaths[relPath.SubPath()]
+	_, stinExists := m.StaticInfos[relPath.SubPath()]
+	return pathExists && stinExists
+}
+
+/*
 ApplyCreate applies a create operation to the local model given that the file
 exists. NOTE: In the case of a file, requires the object to exist in the TEMPDIR
 named as the object indentification.
