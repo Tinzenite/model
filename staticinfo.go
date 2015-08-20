@@ -44,7 +44,7 @@ func createStaticInfo(path, selfpeerid string) (*staticinfo, error) {
 	}
 	return &staticinfo{
 		Identification: id,
-		Version:        map[string]int{selfpeerid: 0}, // set initial version
+		Version:        shared.CreateVersion(),
 		Directory:      stat.IsDir(),
 		Content:        hash,
 		Modtime:        stat.ModTime()}, nil

@@ -170,7 +170,7 @@ func (m *Model) BootstrapModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage
 		// check whether object exists locally (should be case for all .TINZENITEDIR files that we already have locally)
 		_, exists := m.TrackedPaths[remoteSubpath]
 		if !exists {
-			// this means that we must fetch the file, so add to umList
+			// this means that we must fetch the file, so add to umList as CREATE
 			um := shared.CreateUpdateMessage(shared.OpCreate, *remoteObj)
 			umList = append(umList, &um)
 			// continue with next object
@@ -185,17 +185,12 @@ func (m *Model) BootstrapModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage
 		}
 		// assign other ID always (otherwise cummulative merge won't work)
 		localstin.Identification = remoteObj.Identification
-		// merge version
-		success := localstin.Version.Merge(remoteObj.Version)
-		if !success {
-			m.log("bootstrap:", "failed to merge versions!")
-			continue
-		}
+		// assign version
+		localstin.Version = remoteObj.Version
 		// set to local model
 		m.StaticInfos[remoteSubpath] = localstin
-		// if content or version not same, add update message as modify
-		valid := localstin.Version.Valid(remoteObj.Version, m.SelfID)
-		if localstin.Content != remoteObj.Content || !valid {
+		// if content not same, add update message as modify to bring both version to same content
+		if localstin.Content != remoteObj.Content {
 			// this will overwrite the local file! but here we want this behaviour, so all ok
 			m.log("bootstrap: force updating <" + remoteSubpath + ">.")
 			um := shared.CreateUpdateMessage(shared.OpModify, *remoteObj)
@@ -524,6 +519,11 @@ func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.Obje
 			return shared.ErrConflict
 		}
 		// detect conflict
+		if remoteObject.Version.IsEmpty() {
+			log.Println("DEBUG: Received remote modify with empty version: why?", remoteObject.Version)
+			// FIXME this results in a merge (which would be correct IF the version was truly invalid)
+			return nil
+		}
 		if !stin.Version.Valid(remoteObject.Version, m.SelfID) {
 			m.log("Merge error!")
 			return shared.ErrConflict
@@ -965,13 +965,18 @@ func (m *Model) notify(op shared.Operation, obj *shared.ObjectInfo) {
 		m.warn("notify: called with invalid obj!")
 		return
 	}
+	// TODO this catches a bug which shouldn't even be turning up, FIXME
+	if obj.Version.IsEmpty() && op != shared.OpCreate {
+		m.warn("notify: object for " + obj.Path + " has empty version on " + op.String() + " operation!")
+		return
+	}
 	if m.updatechan != nil {
 		if obj == nil {
 			m.log("Failed to notify due to nil obj!")
 			return
 		}
 		//TODO remove this once we're done with model stuff, should if at all be in tinzenite itself!
-		log.Printf("Notify %s: %s\n", op, obj.Name)
+		log.Printf("Notify %s: %s at %s\n", op, obj.Name, obj.Version)
 		m.updatechan <- shared.CreateUpdateMessage(op, *obj)
 	}
 }
