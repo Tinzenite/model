@@ -89,6 +89,7 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 	created, modified, removed := m.compareMaps(m.Root, foreignPaths)
 	// build update messages
 	var umList []*shared.UpdateMessage
+	// for all created paths...
 	for _, subpath := range created {
 		remObj, exists := foreignObjs[subpath]
 		if !exists {
@@ -98,6 +99,7 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 		um := shared.CreateUpdateMessage(shared.OpCreate, *remObj)
 		umList = append(umList, &um)
 	}
+	// for all modified paths...
 	for _, subpath := range modified {
 		localObj, err := m.GetInfo(shared.CreatePath(m.Root, subpath))
 		if err != nil {
@@ -109,18 +111,20 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 			m.warn("Modified path", subpath, "doesn't exist in remote model!")
 			continue
 		}
-		// TODO this shouldn't happen, but catch it to be sure!
-		if localObj.Directory {
-			log.Println("DEBUG: Found modified directory?!")
-			// ignore!
-			continue
-		}
 		// check if same version – if not some modify has happened
-		if !localObj.Version.Equal(remObj.Version) {
+		// TODO FIXME after making sure that Version works via unit tests!
+		if !localObj.Version.Valid(remObj.Version, m.SelfID) {
+			if localObj.Directory {
+				log.Println("DEBUG: Found modified directory?!")
+				log.Printf("local:\n%+v\nremote:\n%+v\n", localObj.Version, remObj.Version)
+				// ignore!
+				continue
+			}
 			um := shared.CreateUpdateMessage(shared.OpModify, *remObj)
 			umList = append(umList, &um)
 		}
 	}
+	// for all removed paths...
 	for _, subpath := range removed {
 		localObj, err := m.GetInfo(shared.CreatePath(m.Root, subpath))
 		if err != nil {
@@ -184,7 +188,7 @@ func (m *Model) BootstrapModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage
 		// set to local model
 		m.StaticInfos[remoteSubpath] = localstin
 		// if content or version not same, add update message as modify
-		_, valid := localstin.Version.Valid(remoteObj.Version, m.SelfID)
+		valid := localstin.Version.Valid(remoteObj.Version, m.SelfID)
 		if localstin.Content != remoteObj.Content || !valid {
 			// this will overwrite the local file! but here we want this behaviour, so all ok
 			m.log("bootstrap: force updating", remoteSubpath, ".")
@@ -514,13 +518,12 @@ func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.Obje
 			return shared.ErrConflict
 		}
 		// detect conflict
-		ver, ok := stin.Version.Valid(remoteObject.Version, m.SelfID)
-		if !ok {
+		if !stin.Version.Valid(remoteObject.Version, m.SelfID) {
 			m.log("Merge error!")
 			return shared.ErrConflict
 		}
 		// apply version update
-		stin.Version = ver
+		stin.Version = remoteObject.Version
 		// if file apply file diff
 		if !remoteObject.Directory {
 			// apply the file op
@@ -618,7 +621,8 @@ func (m *Model) updateLocal(scope string) error {
 
 /*
 compareMaps checks the given path map and returns all operations that need to be
-applied to the internal model to match the current path map.
+applied to the internal model to match the current path map. NOTE: the modified
+list must still be checked if they actually WERE modified!
 */
 func (m *Model) compareMaps(scope string, current map[string]bool) ([]string, []string, []string) {
 	// now: compare old tracked with new version
