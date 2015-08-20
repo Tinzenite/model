@@ -151,7 +151,7 @@ this function.
 func (m *Model) BootstrapModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, error) {
 	/*TODO for now just warn, should work though... :P */
 	if !m.IsEmpty() {
-		m.warn("bootstrap: non empty bootstrap! Need to test this yet...")
+		m.warn("bootstrap: non empty bootstrap! Need to test this yet... TODO this error is incorrect, check why...")
 	}
 	m.log("Bootstrapping from remote model.")
 	// we'll need the simple lists of the foreign model
@@ -185,13 +185,19 @@ func (m *Model) BootstrapModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage
 		}
 		// assign other ID always (otherwise cummulative merge won't work)
 		localstin.Identification = remoteObj.Identification
+		// merge version
+		success := localstin.Version.Merge(remoteObj.Version)
+		if !success {
+			m.log("bootstrap:", "failed to merge versions!")
+			continue
+		}
 		// set to local model
 		m.StaticInfos[remoteSubpath] = localstin
 		// if content or version not same, add update message as modify
 		valid := localstin.Version.Valid(remoteObj.Version, m.SelfID)
 		if localstin.Content != remoteObj.Content || !valid {
 			// this will overwrite the local file! but here we want this behaviour, so all ok
-			m.log("bootstrap: force updating", remoteSubpath, ".")
+			m.log("bootstrap: force updating <" + remoteSubpath + ">.")
 			um := shared.CreateUpdateMessage(shared.OpModify, *remoteObj)
 			umList = append(umList, &um)
 		}
