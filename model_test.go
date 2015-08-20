@@ -9,8 +9,8 @@ import (
 )
 
 func TestCreate(t *testing.T) {
-	root := makeTempDirectory()
-	defer removeTempDirectory(root)
+	root := makeDefaultDirectory()
+	defer removeTemp(root)
 	// test normal legal create
 	_, err := Create(root, PEERID)
 	if err != nil {
@@ -32,8 +32,8 @@ func TestCreate(t *testing.T) {
 }
 
 func TestLoad(t *testing.T) {
-	root := makeTempDirectory()
-	defer removeTempDirectory(root)
+	root := makeDefaultDirectory()
+	defer removeTemp(root)
 	// must first create, update, and store a model so that we can load it
 	model, _ := Create(root, PEERID)
 	model.Update()
@@ -55,8 +55,8 @@ func TestLoad(t *testing.T) {
 }
 
 func TestModel_IsEmpty(t *testing.T) {
-	root := makeTempDirectory()
-	defer removeTempDirectory(root)
+	root := makeDefaultDirectory()
+	defer removeTemp(root)
 	// make model
 	model, _ := Create(root, PEERID)
 	// should be empty since we haven't updated model yet
@@ -72,8 +72,8 @@ func TestModel_IsEmpty(t *testing.T) {
 }
 
 func TestModel_IsTracked(t *testing.T) {
-	root := makeTempDirectory()
-	defer removeTempDirectory(root)
+	root := makeDefaultDirectory()
+	defer removeTemp(root)
 	// make model
 	model, _ := Create(root, PEERID)
 	// shouldn't be tracked yet
@@ -88,8 +88,8 @@ func TestModel_IsTracked(t *testing.T) {
 }
 
 func TestModel_Update(t *testing.T) {
-	root := makeTempDirectory()
-	defer removeTempDirectory(root)
+	root := makeDefaultDirectory()
+	defer removeTemp(root)
 	// create model
 	model, _ := Create(root, PEERID)
 	// test default update
@@ -109,9 +109,30 @@ func TestModel_Update(t *testing.T) {
 	if model.IsTracked(fileFour.Name()) == false {
 		t.Error("Expected file to be tracked")
 	}
-	// TODO complete. Must find a way of modifying single files so we can check
-	// if they are tracked then. Should I split for CREATE, MODIFY, and REMOVE?
-	t.Log("Incomplete test, TODO!")
+}
+
+func TestModel_PartialUpdate(t *testing.T) {
+	root := makeDefaultDirectory()
+	defer removeTemp(root)
+	// create model
+	model, _ := Create(root, PEERID)
+	// test default update
+	err := model.Update()
+	if err != nil {
+		t.Error(err)
+	}
+	// test create update NOTE: EXAMPLE for now only, improve!
+	fileFour, _ := ioutil.TempFile(root, FOUR)
+	if model.IsTracked(fileFour.Name()) == true {
+		t.Error("Expected file to be untracked")
+	}
+	err = model.PartialUpdate("scope string")
+	if err != nil {
+		t.Error(err)
+	}
+	if model.IsTracked(fileFour.Name()) == false {
+		t.Error("Expected file to be tracked")
+	}
 }
 
 // ------------------------- UTILITY FUNCTIONS ---------------------------------
@@ -132,20 +153,30 @@ const (
 /*
 makeTempDirectory writes a temp directory and returns the path to it.
 */
-func makeTempDirectory() string {
+func makeDefaultDirectory() string {
 	root, _ := ioutil.TempDir("", ROOT)
-	_, _ = ioutil.TempFile(root, ONE)
-	_, _ = ioutil.TempFile(root, TWO)
-	subdir, _ := ioutil.TempDir(root, SUBDIR)
-	_, _ = ioutil.TempFile(subdir, THREE)
+	_ = makeTempFile(root, ONE)
+	_ = makeTempFile(root, TWO)
+	subdir := makeTempDir(root, SUBDIR)
+	_ = makeTempFile(subdir, THREE)
 	// to make the dir valid:
 	shared.MakeDotTinzenite(root)
 	return root
 }
 
+func makeTempFile(path, name string) string {
+	file, _ := ioutil.TempFile(path, name)
+	return file.Name()
+}
+
+func makeTempDir(path, name string) string {
+	subdir, _ := ioutil.TempDir(path, name)
+	return subdir
+}
+
 /*
 removeTempDirectory removes everything contained within the path.
 */
-func removeTempDirectory(path string) {
+func removeTemp(path string) {
 	os.RemoveAll(path)
 }
