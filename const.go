@@ -11,6 +11,7 @@ var (
 	errMissingUpdateFile    = errors.New("file for update missing from temp")
 	errIncompatibleModel    = errors.New("model is incompatible")
 	errParentObjectsMissing = errors.New("missing parent objects")
+	errObjectUntracked      = errors.New("object untracked")
 )
 
 var tag = "Model:"

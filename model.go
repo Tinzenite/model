@@ -488,15 +488,9 @@ of the conflict. NOTE: In the case of a file, requires the object to exist in th
 TEMPDIR named as the object indentification.
 */
 func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
-	// ensure file has been written
-	if !shared.FileExists(path.FullPath()) {
-		return shared.ErrIllegalFileState
-	}
-	// sanity check
-	_, ok := m.TrackedPaths[path.SubPath()]
-	if !ok {
-		m.log("Object doesn't exist locally!")
-		return shared.ErrIllegalFileState
+	// ensure file exists
+	if !m.IsTracked(path.FullPath()) {
+		return errObjectUntracked
 	}
 	// fetch stin
 	stin, ok := m.StaticInfos[path.SubPath()]
@@ -549,7 +543,7 @@ func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.Obje
 	}
 	// TODO: DEBUG
 	if stin.Directory {
-		log.Println("Directory modified!?")
+		log.Println("DEBUG: shouldn't happen: Directory modified!?")
 	}
 	// apply updated
 	m.StaticInfos[path.SubPath()] = stin
@@ -754,13 +748,20 @@ func (m *Model) localRemove(path *shared.RelativePath) error {
 
 /*
 remoteRemove handles a remote call of remove.
+
+TODO this is buggy, fix it.
 */
 func (m *Model) remoteRemove(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
-	// TODO make this better...
+	// sanity check
 	if remoteObject == nil {
-		return errors.New("NIL REMOTE OBJECT; NOT ALLOWED")
+		return shared.ErrIllegalParameters
 	}
-	localFileExists := shared.FileExists(path.FullPath())
+	// get state information
+	localFileExists := m.IsTracked(path.FullPath())
+	removalExists := m.isRemoved(remoteObject.Identification)
+	if removalExists {
+		log.Println("We already know of this removal, ignore?")
+	}
 	// if still exists locally remove it
 	if localFileExists {
 		// remove file (removedir should already exist, so nothing else to do)
@@ -771,9 +772,10 @@ func (m *Model) remoteRemove(path *shared.RelativePath, remoteObject *shared.Obj
 		}
 	}
 	// sanity check that removedir exists
-	if !m.isRemoved(remoteObject.Identification) {
+	if !removalExists {
 		m.warn("remote file removed but removedir doesn't exist! removing locally.")
 		// if not we locally delete it
+		// TODO is this correct? after all it doesn't exist --> JUST create removal dir?
 		return m.localRemove(path)
 	}
 	// since remote removal --> write peer to done
