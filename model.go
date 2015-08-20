@@ -109,8 +109,14 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 			m.warn("Modified path", subpath, "doesn't exist in remote model!")
 			continue
 		}
-		// check if same – if not some modify has happened
-		if !localObj.Equal(remObj) {
+		// TODO this shouldn't happen, but catch it to be sure!
+		if localObj.Directory {
+			log.Println("DEBUG: Found modified directory?!")
+			// ignore!
+			continue
+		}
+		// check if same version – if not some modify has happened
+		if !localObj.Version.Equal(remObj.Version) {
 			um := shared.CreateUpdateMessage(shared.OpModify, *remObj)
 			umList = append(umList, &um)
 		}
