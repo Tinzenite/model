@@ -116,22 +116,33 @@ func TestModel_PartialUpdate(t *testing.T) {
 	defer removeTemp(root)
 	// create model
 	model, _ := Create(root, PEERID)
-	// test default update
-	err := model.Update()
+	_ = model.Update()
+	// make subdir which we want tracked and file we don't want tracked
+	subdir := makeTempDir(root, "track")
+	track := makeTempFile(subdir, "track.me")
+	untracked := makeTempFile(root, "dnt.txt")
+	paths := []string{subdir, track, untracked}
+	for _, path := range paths {
+		if model.IsTracked(path) == true {
+			t.Error("Expected file", path, "to be untracked")
+		}
+	}
+	// now partial update the subdir
+	err := model.PartialUpdate(subdir)
 	if err != nil {
 		t.Error(err)
 	}
-	// test create update NOTE: EXAMPLE for now only, improve!
-	fileFour, _ := ioutil.TempFile(root, FOUR)
-	if model.IsTracked(fileFour.Name()) == true {
-		t.Error("Expected file to be untracked")
-	}
-	err = model.PartialUpdate("scope string")
-	if err != nil {
-		t.Error(err)
-	}
-	if model.IsTracked(fileFour.Name()) == false {
-		t.Error("Expected file to be tracked")
+	// test that all but untracked are now tracked
+	for _, path := range paths {
+		if path == untracked {
+			if model.IsTracked(untracked) == true {
+				t.Error("Expected file untracked to be untracked")
+			}
+			continue
+		}
+		if model.IsTracked(path) == false {
+			t.Error("Expected file ", path, "to be tracked")
+		}
 	}
 }
 
