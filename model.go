@@ -647,9 +647,6 @@ func (m *Model) compareMaps(scope string, current map[string]bool) ([]string, []
 /*
 checkRemove checks whether a remove can be finally applied and purged from the
 model dependent on the peers in done and check.
-
-TODO check for orphans and warn? Check for removals that haven't been applied?
-NOTE: this method still requires some work!
 */
 func (m *Model) checkRemove() error {
 	removeDir := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR
@@ -660,11 +657,10 @@ func (m *Model) checkRemove() error {
 	}
 	// check for each removal
 	for _, stat := range allRemovals {
-		// update removal stats
+		// update removal stats (including writing own peer into DONE for all of them)
 		err := m.writeRemovalDir(stat.Name())
 		if err != nil {
 			log.Println("DEBUG: updating removal dir failed on checkRemove!", err)
-			/*TODO: this fails because the dir is created AFTERWARDS – why and how do I fix this? NOTE: TAMINO TODO*/
 			return err
 		}
 		// working directory
@@ -684,6 +680,7 @@ func (m *Model) checkRemove() error {
 			}
 		}
 		if complete {
+			// HARD delete the entire dir: all peers should do the same (soft delete would make removal recursive)
 			err := m.directRemove(shared.CreatePathRoot(m.Root).Apply(objRemovePath))
 			if err != nil {
 				m.log("Failed to direct remove!")
@@ -695,6 +692,12 @@ func (m *Model) checkRemove() error {
 			m.warn("Removal may be orphaned! ", stat.Name())
 			/*TODO this may be called even if it has just been removed... do better logic!
 			Also: is there something we can do in this case?*/
+		}
+		// warn of possibly unapplied removals:
+		subPath, err := m.GetSubPath(stat.Name())
+		// if err just skip the check (can happen if the file has been removed, so ok)
+		if err == nil && m.IsTracked(m.Root+"/"+subPath) {
+			m.warn("Removal may be unapplied!")
 		}
 	}
 	return nil
@@ -790,11 +793,10 @@ func (m *Model) remoteRemove(path *shared.RelativePath, remoteObject *shared.Obj
 
 /*
 writeRemovalDir is an internal function that writes all known peers to check
-and the own peer to done, if not already existing. NOTE: will not update the
-model to avoid recursion: this must be done manually.
+and the own peer to done, if not already existing.
 */
-func (m *Model) writeRemovalDir(identification string) error {
-	removeDirectory := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR + "/" + identification
+func (m *Model) writeRemovalDir(objIdentification string) error {
+	removeDirectory := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR + "/" + objIdentification
 	// make directories if don't exist
 	if !shared.FileExists(removeDirectory) {
 		err := shared.MakeDirectories(removeDirectory, shared.REMOVECHECKDIR, shared.REMOVEDONEDIR)
@@ -821,6 +823,7 @@ func (m *Model) writeRemovalDir(identification string) error {
 			return err
 		}
 	}
+	// write own peer into DONE
 	path := removeDirectory + "/" + shared.REMOVEDONEDIR + "/" + m.SelfID
 	// if already written don't rewrite
 	if !shared.FileExists(path) {
