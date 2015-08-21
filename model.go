@@ -112,16 +112,10 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 			continue
 		}
 		// check if same version – if not some modify has happened
-		// TODO FIXME after making sure that Version works via unit tests!
 		if !localObj.Version.Valid(remObj.Version, m.SelfID) {
-			log.Printf("local:\n%+v\nremote:\n%+v\n", localObj.Version, remObj.Version)
 			if localObj.Directory {
 				log.Println("DEBUG: Found modified directory?!")
 				// ignore!
-				continue
-			}
-			if remObj.Version.IsEmpty() {
-				log.Println("Ohoh, found EMPTY VERSION!")
 				continue
 			}
 			um := shared.CreateUpdateMessage(shared.OpModify, *remObj)
@@ -979,8 +973,6 @@ func (m *Model) notify(op shared.Operation, obj *shared.ObjectInfo) {
 			m.log("Failed to notify due to nil obj!")
 			return
 		}
-		//TODO remove this once we're done with model stuff, should if at all be in tinzenite itself!
-		log.Printf("Notify %s: %s at %s\n", op, obj.Name, obj.Version)
 		m.updatechan <- shared.CreateUpdateMessage(op, *obj)
 	}
 }
