@@ -114,10 +114,14 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 		// check if same version – if not some modify has happened
 		// TODO FIXME after making sure that Version works via unit tests!
 		if !localObj.Version.Valid(remObj.Version, m.SelfID) {
+			log.Printf("local:\n%+v\nremote:\n%+v\n", localObj.Version, remObj.Version)
 			if localObj.Directory {
 				log.Println("DEBUG: Found modified directory?!")
-				log.Printf("local:\n%+v\nremote:\n%+v\n", localObj.Version, remObj.Version)
 				// ignore!
+				continue
+			}
+			if remObj.Version.IsEmpty() {
+				log.Println("Ohoh, found EMPTY VERSION!")
 				continue
 			}
 			um := shared.CreateUpdateMessage(shared.OpModify, *remObj)
@@ -966,7 +970,7 @@ func (m *Model) notify(op shared.Operation, obj *shared.ObjectInfo) {
 		return
 	}
 	// TODO this catches a bug which shouldn't even be turning up, FIXME
-	if obj.Version.IsEmpty() && op != shared.OpCreate {
+	if obj.Version.IsEmpty() && op == shared.OpModify {
 		m.warn("notify: object for " + obj.Path + " has empty version on " + op.String() + " operation!")
 		return
 	}
