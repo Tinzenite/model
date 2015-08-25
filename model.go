@@ -149,7 +149,7 @@ this function.
 func (m *Model) BootstrapModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, error) {
 	/*TODO for now just warn, should work though... :P */
 	if !m.IsEmpty() {
-		m.warn("bootstrap: non empty bootstrap! Need to test this yet... TODO this error is incorrect, check why...")
+		m.warn("bootstrap: non empty bootstrap!")
 	}
 	m.log("Bootstrapping from remote model.")
 	// we'll need the simple lists of the foreign model
@@ -403,10 +403,19 @@ IsEmpty returns true if the model is empty SAVE for the .tinzenite files.
 func (m *Model) IsEmpty() bool {
 	// basically if model has any files apart from those in the .tinzenite dir, it is not empty
 	for subpath := range m.TrackedPaths {
-		if !strings.HasPrefix(subpath, shared.TINZENITEDIR) {
-			return false
+		// root path is ignored
+		if subpath == "" {
+			continue
 		}
+		// .tinzenite and all subpaths are ignored
+		if strings.HasPrefix(subpath, shared.TINZENITEDIR) {
+			continue
+		}
+		// otherwise we know it is not empty
+		// m.warn("Not empty because of", subpath)
+		return false
 	}
+	// if we reach this --> empty
 	return true
 }
 

@@ -60,13 +60,13 @@ func TestModel_IsEmpty(t *testing.T) {
 	// make model
 	model, _ := Create(root, PEERID)
 	// should be empty since we haven't updated model yet
-	if model.IsEmpty() == false {
+	if !model.IsEmpty() {
 		t.Error("Expected IsEmpty to return true")
 	}
 	// update model to reflect contents
 	_ = model.Update()
 	// should now be non empty
-	if model.IsEmpty() == true {
+	if model.IsEmpty() {
 		t.Error("Expected IsEmpty to return false")
 	}
 }
