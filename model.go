@@ -623,19 +623,31 @@ func (m *Model) updateLocal(scope string) error {
 	relPath := shared.CreatePathRoot(m.Root)
 	// first check creations
 	for _, subpath := range created {
-		m.ApplyCreate(relPath.Apply(subpath), nil)
+		err := m.ApplyCreate(relPath.Apply(subpath), nil)
+		if err != nil {
+			m.log("updateLocal: create error for", subpath)
+			return err
+		}
 	}
 	// then modifications
 	for _, subpath := range modified {
 		modPath := relPath.Apply(subpath)
 		// if no modifications no need to try to apply any
 		if m.isModified(modPath) {
-			m.ApplyModify(modPath, nil)
+			err := m.ApplyModify(modPath, nil)
+			if err != nil {
+				m.log("updateLocal: modify error for", subpath)
+				return err
+			}
 		}
 	}
 	// finally deletions
 	for _, subpath := range removed {
-		m.ApplyRemove(relPath.Apply(subpath), nil)
+		err := m.ApplyRemove(relPath.Apply(subpath), nil)
+		if err != nil {
+			m.log("updateLocal: remove error for", subpath)
+			return err
+		}
 	}
 	// done
 	return nil
@@ -787,6 +799,7 @@ remoteRemove handles a remote call of remove.
 TODO this is buggy, fix it.
 */
 func (m *Model) remoteRemove(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
+	log.Println("DEBUG: remote remove!")
 	// sanity check
 	if remoteObject == nil {
 		return shared.ErrIllegalParameters
