@@ -702,7 +702,7 @@ func (m *Model) checkRemove() error {
 	// check for each removal
 	for _, stat := range allRemovals {
 		// update removal stats (including writing own peer into DONE for all of them)
-		err := m.writeRemovalDir(stat.Name())
+		err = m.writeRemovalDir(stat.Name())
 		if err != nil {
 			log.Println("DEBUG: updating removal dir failed on checkRemove!", err)
 			return err
@@ -724,12 +724,19 @@ func (m *Model) checkRemove() error {
 			}
 		}
 		if complete {
-			// HARD delete the entire dir: all peers should do the same (soft delete would make removal recursive)
-			err := m.directRemove(shared.CreatePathRoot(m.Root).Apply(objRemovePath))
-			if err != nil {
-				m.log("Failed to direct remove!")
-				return err
-			}
+			// TODO write temp file to localdir to remember that we've already
+			// deleted this to avoid recreating it with a timeout after which we
+			// will reaccept this. We will need to check ApplyCreate against it.
+			// FIXME NOTE TODO Tamino!
+			log.Println("DEBUG: finish implementing this!")
+			/*
+				// HARD delete the entire dir: all peers should do the same (soft delete would make removal recursive)
+				err := m.directRemove(shared.CreatePathRoot(m.Root).Apply(objRemovePath))
+				if err != nil {
+					m.log("Failed to direct remove!")
+					return err
+				}
+			*/
 		}
 		// warn of possible orphans
 		if time.Since(stat.ModTime()) > removalTimeout {
