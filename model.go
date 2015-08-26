@@ -835,7 +835,9 @@ func (m *Model) remoteRemove(path *shared.RelativePath, remoteObject *shared.Obj
 		m.log("updating removal dir failed!")
 		return err
 	}
-	// if we get a removal from another peer that peer seen the deletion, but we'll be notified by the create method, so nothing to do here
+	// if we get a removal from another peer that peer has seen the deletion, but
+	// we'll be notified by the create method, so nothing to do here
+	// TODO: why don't we notify again? Is the above correct?
 	return nil
 }
 
@@ -865,9 +867,10 @@ func (m *Model) writeRemovalDir(objIdentification string) error {
 		if shared.FileExists(path) {
 			continue
 		}
+		m.log("DEBUG: Peer", peer, "is being written to", shared.REMOVECHECKDIR, ".")
 		err = ioutil.WriteFile(path, []byte(""), shared.FILEPERMISSIONMODE)
 		if err != nil {
-			m.log("Couldn't write peer file", peer, "to check!")
+			m.log("Couldn't write peer file", peer, "to", shared.REMOVECHECKDIR, "!")
 			return err
 		}
 	}
@@ -875,10 +878,11 @@ func (m *Model) writeRemovalDir(objIdentification string) error {
 	path := removeDirectory + "/" + shared.REMOVEDONEDIR + "/" + m.SelfID
 	// if already written don't rewrite
 	if !shared.FileExists(path) {
+		m.log("DEBUG: Own peer is being written to", shared.REMOVEDONEDIR, ".")
 		// write own peer file also to done dir as removal already applied locally
 		err = ioutil.WriteFile(path, []byte(""), shared.FILEPERMISSIONMODE)
 		if err != nil {
-			m.log("Couldn't write own peer file to done!", err.Error())
+			m.log("Couldn't write own peer file to", shared.REMOVEDONEDIR, "!", err.Error())
 			return err
 		}
 	}
