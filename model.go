@@ -440,14 +440,18 @@ func (m *Model) ApplyCreate(path *shared.RelativePath, remoteObject *shared.Obje
 		return errParentObjectsMissing
 	}
 	// ensure no file has been written already
-	localCreate := shared.FileExists(path.FullPath())
+	localExists := shared.FileExists(path.FullPath())
 	// sanity check if the object already exists locally
-	_, ok := m.TrackedPaths[path.SubPath()]
-	if ok {
-		// m.log("Object exists locally! Can not apply create!", path.FullPath())
-		return shared.ErrConflict
+	if m.IsTracked(path.FullPath()) {
+		if localExists {
+			// if tracked and file exists --> merge
+			return shared.ErrConflict
+		}
+		// if tracked but file doesn't exist --> error
+		m.warn("created object is already tracked but file doesn't exist!")
+		return shared.ErrIllegalFileState
 	}
-	// NOTE: we don't explicitely check m.Objinfo because we'll just overwrite it if already exists
+	// we don't explicitely check m.Objinfo because we'll just overwrite it if already exists
 	var stin *staticinfo
 	var err error
 	// if remote create
@@ -457,8 +461,8 @@ func (m *Model) ApplyCreate(path *shared.RelativePath, remoteObject *shared.Obje
 			m.warn("received create for object pending removal!")
 			return nil
 		}
-		// create conflict
-		if localCreate {
+		// create conflict if locally exists
+		if localExists {
 			return shared.ErrConflict
 		}
 		// dirs are made directly, files have to be moved from temp
@@ -482,7 +486,8 @@ func (m *Model) ApplyCreate(path *shared.RelativePath, remoteObject *shared.Obje
 		// apply external attributes
 		stin.applyObjectInfo(remoteObject)
 	} else {
-		if !localCreate {
+		// local create
+		if !localExists {
 			return shared.ErrIllegalFileState
 		}
 		// build staticinfo
@@ -494,8 +499,12 @@ func (m *Model) ApplyCreate(path *shared.RelativePath, remoteObject *shared.Obje
 	// add obj to local model
 	m.TrackedPaths[path.SubPath()] = true
 	m.StaticInfos[path.SubPath()] = *stin
-	localObj, _ := m.GetInfo(path)
-	m.notify(shared.OpCreate, localObj)
+	localObj, err := m.GetInfo(path)
+	if err != nil {
+		m.warn("failed to retrieve created ObjectInfo for notify!")
+	} else {
+		m.notify(shared.OpCreate, localObj)
+	}
 	return nil
 }
 
