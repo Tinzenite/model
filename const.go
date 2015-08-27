@@ -21,3 +21,9 @@ removalTimeout is the timeout after which removals are considered orphaned and
 Model will warn of them.
 */
 const removalTimeout = 24 * time.Hour
+
+/*
+removalLocal is the timeout after which a peer will forget about a removal
+locally.
+*/
+const removalLocal = 24 * time.Hour

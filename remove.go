@@ -28,37 +28,11 @@ func (m *Model) checkRemove() error {
 			log.Println("DEBUG: updating removal dir failed on checkRemove!", err)
 			return err
 		}
-		// working directory
-		objRemovePath := removeDir + "/" + stat.Name()
-		// read all peers to check for
-		allCheck, err := ioutil.ReadDir(objRemovePath + "/" + shared.REMOVECHECKDIR)
+		// check if we can complete the removal
+		err := m.completeTrackedRemoval(stat.Name())
 		if err != nil {
-			m.log("Failed reading check peer list!")
-			return err
-		}
-		// test whether we can remove it
-		complete := true
-		for _, peerStat := range allCheck {
-			if !shared.FileExists(objRemovePath + "/" + shared.REMOVEDONEDIR + "/" + peerStat.Name()) {
-				complete = false
-				break
-			}
-		}
-		if complete {
-			// TODO write temp file to localdir to remember that we've already
-			// deleted this to avoid recreating it with a timeout after which we
-			// will reaccept this. We will need to check ApplyCreate against it.
-
-			// FIXME NOTE TODO Tamino!
-			log.Println("DEBUG: finish implementing this!")
-			/*
-				// HARD delete the entire dir: all peers should do the same (soft delete would make removal recursive)
-				err := m.directRemove(shared.CreatePathRoot(m.Root).Apply(objRemovePath))
-				if err != nil {
-					m.log("Failed to direct remove!")
-					return err
-				}
-			*/
+			// notify of error but don't stop, rest can still be checked
+			m.log("completeTrackedRemoval:", err.Error())
 		}
 		// warn of possible orphans
 		if time.Since(stat.ModTime()) > removalTimeout {
@@ -72,6 +46,60 @@ func (m *Model) checkRemove() error {
 		if err == nil && m.IsTracked(m.Root+"/"+subPath) {
 			m.warn("Removal may be unapplied!")
 		}
+	}
+	// also remove old local remove notifies:
+	localDir := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.LOCALDIR + "/" + shared.REMOVESTOREDIR
+	allLocals, err := ioutil.ReadDir(localDir)
+	if err != nil {
+		m.log("reading of local remove notifies failed!")
+		return err
+	}
+	for _, stat := range allLocals {
+		if time.Since(stat.ModTime()) > removalLocal {
+			log.Println("DEBUG: local remove of notify can be done!")
+			// TODO actually remove them here...
+		}
+	}
+	return nil
+}
+
+/*
+completeTrackedRemoval checks and if ok, removes the tracked removal dir, replacing
+it with a local notify of the removal. This allows the tracked removal to be
+purged. After a time out the local notify is also removed.
+*/
+func (m *Model) completeTrackedRemoval(identification string) error {
+	removeDir := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR
+	// working directory
+	objRemovePath := removeDir + "/" + identification
+	// read all peers to check for
+	allCheck, err := ioutil.ReadDir(objRemovePath + "/" + shared.REMOVECHECKDIR)
+	if err != nil {
+		m.log("Failed reading check peer list!")
+		return err
+	}
+	// test whether we can remove it
+	complete := true
+	for _, peerStat := range allCheck {
+		if !shared.FileExists(objRemovePath + "/" + shared.REMOVEDONEDIR + "/" + peerStat.Name()) {
+			complete = false
+			break
+		}
+	}
+	if complete {
+		// make local note of removal instead of tracked one so that we can remove it
+		err := m.makeLocalRemove(identification)
+		if err != nil {
+			m.log("failed to write local remove note, will not complete removal!")
+			return err
+		}
+		// HARD delete the entire dir: all peers should do the same (soft delete would make removal recursive)
+		err = m.directRemove(shared.CreatePathRoot(m.Root).Apply(objRemovePath))
+		if err != nil {
+			m.log("Failed to direct remove!")
+			return err
+		}
+		// note that other peers may not HARD delete it yet, but the isLocalRemoved check ensures that the dir isn't reintroduced
 	}
 	return nil
 }
@@ -156,10 +184,8 @@ func (m *Model) directRemove(path *shared.RelativePath) error {
 }
 
 /*
-isRemoved checks whether a file is due for deletion.
-
-TODO check local remove store? Can I just build this in here and it will work
-even for create?
+isRemoved checks whether a file is due for deletion or whether it has already
+been locally removed completely.
 */
 func (m *Model) isRemoved(identification string) bool {
 	path := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR + "/" + identification
