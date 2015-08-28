@@ -747,12 +747,6 @@ func (m *Model) remoteRemove(path *shared.RelativePath, remoteObject *shared.Obj
 	// get state information
 	localFileExists := m.IsTracked(path.FullPath())
 	removalExists := m.isRemoved(remoteObject.Identification)
-	if removalExists {
-		// if we already know of this removal, we ignore this operation
-		m.warn("we already know of this removal so ignoring.")
-		// TODO theoretically we should never receive removals of objects that we already know about because it would have been filterend via HasUpdate. Check that this is sound anyway!
-		return nil
-	}
 	// if still exists locally remove it
 	if localFileExists {
 		// remove file (removedir should already exist, so nothing else to do)
