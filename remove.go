@@ -10,6 +10,94 @@ import (
 )
 
 /*
+localRemove initiates a deletion locally, creating all necessary files and
+removing the file from the model.
+*/
+func (m *Model) localRemove(path *shared.RelativePath) error {
+	// get stin for notify
+	stin, exists := m.StaticInfos[path.SubPath()]
+	if !exists {
+		m.log("LocalRemove: stin is missing!")
+		return shared.ErrIllegalFileState
+	}
+	// sanity check
+	if m.isRemoved(stin.Identification) {
+		// shouldn't happen but let's be sure
+		m.warn("LocalRemove: file already removed!")
+		return nil
+	}
+	// direct remove
+	err := m.directRemove(path)
+	if err != nil {
+		return err
+	}
+	// write peers
+	err = m.writeRemovalDir(stin.Identification)
+	if err != nil {
+		m.log("failed to update removal dir for", stin.Identification)
+		return err
+	}
+	// update removal dir here so that creations etc are sent before notify below!
+	err = m.updateLocal(m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR + "/" + stin.Identification)
+	if err != nil {
+		m.warn("partial update on local remove failed!")
+		// but continue on because the changes will be synchronized later then anyway
+	}
+	// send notify
+	notifyObj := &shared.ObjectInfo{
+		Identification: stin.Identification,
+		Name:           path.LastElement(),
+		Path:           path.SubPath(),
+		Content:        stin.Content,
+		Version:        stin.Version,
+		Directory:      stin.Directory}
+	m.notify(shared.OpRemove, notifyObj)
+	return nil
+}
+
+/*
+remoteRemove handles a remote call of remove.
+
+TODO this is buggy, fix it.
+*/
+func (m *Model) remoteRemove(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
+	log.Println("DEBUG: remote remove!")
+	// sanity check
+	if remoteObject == nil {
+		return shared.ErrIllegalParameters
+	}
+	// get state information
+	localFileExists := m.IsTracked(path.FullPath())
+	removalExists := m.isRemoved(remoteObject.Identification)
+	// if still exists locally remove it
+	if localFileExists {
+		// remove file (removedir should already exist, so nothing else to do)
+		err := m.directRemove(path)
+		if err != nil {
+			m.log("couldn't remove file", path.FullPath())
+			return err
+		}
+	}
+	// sanity check that removedir exists
+	if !removalExists {
+		m.warn("remote file removed but removedir doesn't exist! removing locally.")
+		// if not we locally delete it
+		// TODO is this correct? after all it doesn't exist --> JUST create removal dir?
+		return m.localRemove(path)
+	}
+	// since remote removal --> write peer to done
+	err := m.writeRemovalDir(remoteObject.Identification)
+	if err != nil {
+		m.log("updating removal dir failed!")
+		return err
+	}
+	// if we get a removal from another peer that peer has seen the deletion, but
+	// we'll be notified by the create method, so nothing to do here
+	// TODO: why don't we notify again? Is the above correct?
+	return nil
+}
+
+/*
 checkRemove checks whether a remove can be finally applied and purged from the
 model dependent on the peers in done and check.
 */
