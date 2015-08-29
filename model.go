@@ -107,18 +107,23 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 		}
 		remObj, exists := foreignObjs[subpath]
 		if !exists {
-			m.warn("Modified path", subpath, "doesn't exist in remote model!")
+			m.warn("SyncModel: Modified path", subpath, "doesn't exist in remote model!")
 			continue
 		}
 		// check if same version – if not some modify has happened
-		if !localObj.Version.Valid(remObj.Version, m.SelfID) {
+		if !localObj.Version.Equal(remObj.Version) {
 			if localObj.Directory {
-				log.Println("DEBUG: Found modified directory?!")
+				// shouldn't happen but catch to be sure
+				m.warn("SyncModel: Found modified directory?!")
 				// ignore!
 				continue
 			}
 			um := shared.CreateUpdateMessage(shared.OpModify, *remObj)
 			umList = append(umList, &um)
+		}
+		// sanity check
+		if localObj.Content != remObj.Content {
+			m.warn("SyncModel: modify has equal version but different content!")
 		}
 	}
 	// for all removed paths...
@@ -134,6 +139,8 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 			um := shared.CreateUpdateMessage(shared.OpRemove, *localObj)
 			umList = append(umList, &um)
 		}
+		// TODO
+		log.Println("DEBUG: ModelSync: not generating removal message for", subpath)
 	}
 	// sort so that dirs are listed before their contents
 	return sortUpdateMessages(umList), nil
@@ -535,9 +542,8 @@ func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.Obje
 		}
 		// detect conflict
 		if remoteObject.Version.IsEmpty() {
-			log.Println("DEBUG: Received remote modify with empty version: why?", remoteObject.Version)
-			// FIXME this results in a merge (which would be correct IF the version was truly invalid)
-			return nil
+			// FIXME this is a strange modify that shouldn't even be happening...
+			log.Println("DEBUG: Received remote modify with empty version: why?", remoteObject.Path)
 		}
 		if !stin.Version.Valid(remoteObject.Version, m.SelfID) {
 			m.log("Merge error!")

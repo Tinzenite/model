@@ -22,13 +22,13 @@ func (m *Model) localRemove(path *shared.RelativePath) error {
 	}
 	// sanity check
 	if m.isRemoved(stin.Identification) {
-		// shouldn't happen but let's be sure
-		m.warn("LocalRemove: file already removed!")
-		return nil
+		// shouldn't happen but let's be sure; warn at least
+		m.warn("LocalRemove: file removal already begun!")
 	}
 	// direct remove
 	err := m.directRemove(path)
 	if err != nil {
+		m.log("LocalRemove: failed to directly remove file!")
 		return err
 	}
 	// write peers
@@ -61,10 +61,8 @@ remoteRemove handles a remote call of remove.
 TODO this is buggy, fix it.
 */
 func (m *Model) remoteRemove(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
-	log.Println("DEBUG: remote remove! START")
 	// sanity check
 	if remoteObject == nil {
-		log.Println("DEBUG: remoteObject nil")
 		return shared.ErrIllegalParameters
 	}
 	// get state information
@@ -72,7 +70,6 @@ func (m *Model) remoteRemove(path *shared.RelativePath, remoteObject *shared.Obj
 	removalExists := m.isRemoved(remoteObject.Identification)
 	// if still exists locally remove it
 	if localFileExists {
-		log.Println("DEBUG: local file exists")
 		// remove file (removedir should already exist, so nothing else to do)
 		err := m.directRemove(path)
 		if err != nil {
@@ -80,12 +77,10 @@ func (m *Model) remoteRemove(path *shared.RelativePath, remoteObject *shared.Obj
 			return err
 		}
 	}
-	// sanity check that removedir exists
+	// warn if remove dir didn't exist yet
 	if !removalExists {
-		m.warn("remote file removed but removedir doesn't exist! removing locally.")
-		// if not we locally delete it
-		// TODO is this correct? after all it doesn't exist --> JUST create removal dir?
-		return m.localRemove(path)
+		// we'll create it anyway if it doesn't exist, so all ok but warn
+		m.warn("remote file removed but removedir didn't yet exist!")
 	}
 	// since remote removal --> write peer to done
 	err := m.writeRemovalDir(remoteObject.Identification)
@@ -93,10 +88,8 @@ func (m *Model) remoteRemove(path *shared.RelativePath, remoteObject *shared.Obj
 		m.log("updating removal dir failed!")
 		return err
 	}
-	// if we get a removal from another peer that peer has seen the deletion, but
-	// we'll be notified by the create method, so nothing to do here
-	// TODO: why don't we notify again? Is the above correct?
-	log.Println("DEBUG: remove remove! DONE")
+	// send notify (reuse remoteObject)
+	m.notify(shared.OpRemove, remoteObject)
 	return nil
 }
 
@@ -221,7 +214,6 @@ func (m *Model) writeRemovalDir(objIdentification string) error {
 		if shared.FileExists(path) {
 			continue
 		}
-		m.log("DEBUG: Peer", peer, "is being written to", shared.REMOVECHECKDIR, ".")
 		err = ioutil.WriteFile(path, []byte(""), shared.FILEPERMISSIONMODE)
 		if err != nil {
 			m.log("Couldn't write peer file", peer, "to", shared.REMOVECHECKDIR, "!")
@@ -232,7 +224,6 @@ func (m *Model) writeRemovalDir(objIdentification string) error {
 	path := removeDirectory + "/" + shared.REMOVEDONEDIR + "/" + m.SelfID
 	// if already written don't rewrite
 	if !shared.FileExists(path) {
-		m.log("DEBUG: Own peer is being written to", shared.REMOVEDONEDIR, ".")
 		// write own peer file also to done dir as removal already applied locally
 		err = ioutil.WriteFile(path, []byte(""), shared.FILEPERMISSIONMODE)
 		if err != nil {
