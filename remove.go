@@ -61,9 +61,10 @@ remoteRemove handles a remote call of remove.
 TODO this is buggy, fix it.
 */
 func (m *Model) remoteRemove(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
-	log.Println("DEBUG: remote remove!")
+	log.Println("DEBUG: remote remove! START")
 	// sanity check
 	if remoteObject == nil {
+		log.Println("DEBUG: remoteObject nil")
 		return shared.ErrIllegalParameters
 	}
 	// get state information
@@ -71,6 +72,7 @@ func (m *Model) remoteRemove(path *shared.RelativePath, remoteObject *shared.Obj
 	removalExists := m.isRemoved(remoteObject.Identification)
 	// if still exists locally remove it
 	if localFileExists {
+		log.Println("DEBUG: local file exists")
 		// remove file (removedir should already exist, so nothing else to do)
 		err := m.directRemove(path)
 		if err != nil {
@@ -94,6 +96,7 @@ func (m *Model) remoteRemove(path *shared.RelativePath, remoteObject *shared.Obj
 	// if we get a removal from another peer that peer has seen the deletion, but
 	// we'll be notified by the create method, so nothing to do here
 	// TODO: why don't we notify again? Is the above correct?
+	log.Println("DEBUG: remove remove! DONE")
 	return nil
 }
 
