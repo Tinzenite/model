@@ -95,6 +95,7 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 			m.warn("Created path", subpath, "doesn't exist in remote model!")
 			continue
 		}
+		log.Println("DEBUG: creating", subpath)
 		um := shared.CreateUpdateMessage(shared.OpCreate, *remObj)
 		umList = append(umList, &um)
 	}
@@ -118,6 +119,7 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 				// ignore!
 				continue
 			}
+			log.Println("DEBUG: modifing", subpath)
 			um := shared.CreateUpdateMessage(shared.OpModify, *remObj)
 			umList = append(umList, &um)
 		}
@@ -136,11 +138,11 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 		// this works because the deletion files will already have been created, but the removal not applied to the local model yet
 		if m.isRemoved(localObj.Identification) {
 			// NOTE: we use localObj here because remote object won't exist since we need to remove it locally
+			log.Println("DEBUG: removing", subpath)
 			um := shared.CreateUpdateMessage(shared.OpRemove, *localObj)
 			umList = append(umList, &um)
 		}
-		// TODO
-		log.Println("DEBUG: ModelSync: not generating removal message for", subpath)
+		// NONE of the other paths are truly removed: the foreign model just doesn't know of them, so done
 	}
 	// sort so that dirs are listed before their contents
 	return sortUpdateMessages(umList), nil
