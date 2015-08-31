@@ -140,8 +140,11 @@ func (m *Model) checkRemove() error {
 	}
 	for _, stat := range allLocals {
 		if time.Since(stat.ModTime()) > removalLocal {
-			log.Println("DEBUG: local remove of notify can be done!")
-			// TODO actually remove them here...
+			// remove notify
+			err := os.Remove(localDir + "/" + stat.Name())
+			if err != nil {
+				m.warn("Failed to remove notify object:", err.Error())
+			}
 		}
 	}
 	return nil
