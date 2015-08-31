@@ -239,6 +239,7 @@ be called after the file operation has been applied but before the next update!
 /*TODO catch shadow files*/
 func (m *Model) ApplyUpdateMessage(msg *shared.UpdateMessage) error {
 	var err error
+	// TODO maybe filter externally because we may need to send messages back...
 	err = m.filterMessage(msg)
 	if err != nil {
 		m.warn("Filter failed message!", err.Error())
@@ -570,6 +571,13 @@ TEMPDIR named as the object indentification.
 */
 func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
 	// NOTE that ApplyModify does NOT call filterMessage itself!
+	// TODO remove me once this bug is fixed NOTE FIXME
+	// NOTE it IS the external message that is the problem. So how do I find out where it is sent?
+	if remoteObject != nil && remoteObject.Version.IsEmpty() {
+		log.Println("DEBUG: Yup, ignoring empty version!", remoteObject.Path)
+		// quietly ignoring it for now...
+		return nil
+	}
 	// fetch stin
 	stin, ok := m.StaticInfos[path.SubPath()]
 	if !ok {
