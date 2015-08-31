@@ -585,11 +585,7 @@ func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.Obje
 			m.log("Merge error! Untracked local changes!")
 			return shared.ErrConflict
 		}
-		// detect conflict
-		if remoteObject.Version.IsEmpty() {
-			// FIXME this is a strange modify that shouldn't even be happening...
-			log.Println("DEBUG: Received remote modify with empty version: why?", remoteObject.Path)
-		}
+		// check for merge error
 		if !stin.Version.Valid(remoteObject.Version, m.SelfID) {
 			m.log("Merge error!")
 			return shared.ErrConflict
@@ -604,8 +600,7 @@ func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.Obje
 				return err
 			}
 		} else {
-			/*TODO can this happen for directories? Only once move is implemented, right?
-			Update: it can. Why?*/
+			/*TODO can this happen for directories? Only once move is implemented, right?*/
 			m.warn("modify not implemented for directories!")
 		}
 	} else {
