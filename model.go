@@ -483,6 +483,11 @@ func (m *Model) filterMessage(um *shared.UpdateMessage) error {
 			return errObjectUntracked
 		}
 	}
+	// check for empty version on modify
+	if um.Operation == shared.OpModify && um.Object.Version.IsEmpty() {
+		m.warn("Filter found empty version on modify!")
+		return errFilter
+	}
 	return nil
 }
 
