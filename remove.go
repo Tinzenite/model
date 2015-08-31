@@ -165,14 +165,33 @@ func (m *Model) completeTrackedRemoval(identification string) error {
 		m.log("Failed reading check peer list!")
 		return err
 	}
-	// test whether we can remove it
+	// Test whether we can remove it. This means all peers must have been written
+	// AND modify time has reached timeout. Timeout is required to avoid removing
+	// removedirs before every peer has a chance of actually noticing they are complete!
 	complete := true
 	for _, peerStat := range allCheck {
-		if !shared.FileExists(objRemovePath + "/" + shared.REMOVEDONEDIR + "/" + peerStat.Name()) {
+		checkPath := objRemovePath + "/" + shared.REMOVEDONEDIR + "/" + peerStat.Name()
+		// if a peer doesn't exist yet the removal is NOT yet complete, so break
+		if !shared.FileExists(checkPath) {
+			complete = false
+			break
+		}
+		// otherwise check modify time
+		stat, err := os.Lstat(checkPath)
+		if err != nil {
+			m.warn("Failed to check modify time for peer in REMOVEDONEDIR!")
+			// if something is wrong don't remove it so we can debug it
+			complete = false
+			break
+		}
+		// check:
+		if time.Since(stat.ModTime()) < removalLocal {
+			// if modtime is smaller than timeout, not done yet
 			complete = false
 			break
 		}
 	}
+	// remove if all peers have written their peer info in REMOVEDONEDIR AND timeout reached (see above)
 	if complete {
 		// make local note of removal instead of tracked one so that we can remove it
 		err := m.makeLocalRemove(identification)
