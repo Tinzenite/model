@@ -238,8 +238,13 @@ be called after the file operation has been applied but before the next update!
 */
 /*TODO catch shadow files*/
 func (m *Model) ApplyUpdateMessage(msg *shared.UpdateMessage) error {
-	path := shared.CreatePath(m.Root, msg.Object.Path)
 	var err error
+	err = m.filterMessage(msg)
+	if err != nil {
+		m.warn("Filter failed message!", err.Error())
+		return err
+	}
+	path := shared.CreatePath(m.Root, msg.Object.Path)
 	switch msg.Operation {
 	case shared.OpCreate:
 		err = m.ApplyCreate(path, &msg.Object)
@@ -438,15 +443,56 @@ func (m *Model) IsTracked(path string) bool {
 }
 
 /*
+filterMessage checks a message for special cases. Will return an error if
+something is not correct. Intended to be called for all external messages.
+NOTE: is not called on direct calls of Apply*()!
+*/
+func (m *Model) filterMessage(um *shared.UpdateMessage) error {
+	// check if removed --> if yes warn and ignore update (except if a remove operation)
+	if m.isRemoved(um.Object.Identification) && um.Operation != shared.OpRemove {
+		// TODO resend removal! NOTE: implement later once removal works correctly
+		log.Println("DEBUG: TODO: resend removal!")
+		return errObjectRemoved
+	}
+	// check if part of REMOVEDIR
+	removePath := shared.TINZENITEDIR + "/" + shared.REMOVEDIR
+	if strings.HasSuffix(removePath, um.Object.Path) {
+		// if not a create operation, something is wrong
+		if um.Operation != shared.OpCreate {
+			// this also catches removals WITHIN the REMOVEDIR which shouldn't happen
+			m.warn("Filter ran into disallowed operation!", um.Operation.String())
+			return errFilter
+		}
+		// if the object has already been locally notified, the dir doesn't exist anymore
+		if m.isLocalRemoved(um.Object.Identification) {
+			log.Println("DEBUG: is locally removed already!")
+			// TODO resend creation event for own peer and ignore?
+			return errFilter
+		}
+		// otherwise ok, continue with other checks
+	}
+	// ensure parents exists so that operation is not on "hanging" object
+	if !m.parentsExist(shared.CreatePath(m.Root, um.Object.Path)) {
+		m.warn("Filter ran into hanging object!")
+		return errParentObjectsMissing
+	}
+	// if not create, object must be tracked
+	if um.Operation != shared.OpCreate {
+		if !m.IsTracked(um.Object.Path) {
+			m.warn("Filter found untracked object!")
+			return errObjectUntracked
+		}
+	}
+	return nil
+}
+
+/*
 ApplyCreate applies a create operation to the local model given that the file
 exists. NOTE: In the case of a file, requires the object to exist in the TEMPDIR
 named as the object indentification.
 */
 func (m *Model) ApplyCreate(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
-	// ensure parents exists so that create is not "hanging" object
-	if !m.parentsExist(path) {
-		return errParentObjectsMissing
-	}
+	// NOTE that ApplyCreate does NOT call filterMessage itself!
 	// ensure no file has been written already
 	localExists := shared.FileExists(path.FullPath())
 	// sanity check if the object already exists locally
@@ -464,11 +510,6 @@ func (m *Model) ApplyCreate(path *shared.RelativePath, remoteObject *shared.Obje
 	var err error
 	// if remote create
 	if remoteObject != nil {
-		// check if removed --> if yes warn and ignore update
-		if m.isRemoved(remoteObject.Identification) {
-			m.warn("received create for a removed object!")
-			return nil
-		}
 		// create conflict if locally exists
 		if localExists {
 			return shared.ErrConflict
@@ -523,10 +564,7 @@ of the conflict. NOTE: In the case of a file, requires the object to exist in th
 TEMPDIR named as the object indentification.
 */
 func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
-	// ensure file exists
-	if !m.IsTracked(path.FullPath()) {
-		return errObjectUntracked
-	}
+	// NOTE that ApplyModify does NOT call filterMessage itself!
 	// fetch stin
 	stin, ok := m.StaticInfos[path.SubPath()]
 	if !ok {
@@ -594,12 +632,8 @@ func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.Obje
 ApplyRemove applies a remove operation.
 */
 func (m *Model) ApplyRemove(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
+	// NOTE that ApplyCreate does NOT call filterMessage itself!
 	remoteRemove := remoteObject != nil
-	// check that deletion logic is sane (don't want to create deletion on deletion)
-	if strings.HasPrefix(path.SubPath(), shared.TINZENITEDIR+"/"+shared.REMOVEDIR+"/") {
-		m.warn("removedir objects should not leak with removal!")
-		return nil
-	}
 	// safe guard against unwanted deletions
 	if path.RootPath() != m.Root || path.SubPath() == "" {
 		m.warn("trying to remove illegal path, will ignore!", path.FullPath())
@@ -738,8 +772,7 @@ If this is not the case it returns false.
 func (m *Model) parentsExist(path *shared.RelativePath) bool {
 	for !path.AtRoot() {
 		path = path.Up()
-		_, exists := m.TrackedPaths[path.SubPath()]
-		if !exists {
+		if !m.IsTracked(path.FullPath()) {
 			return false
 		}
 	}

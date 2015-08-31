@@ -12,6 +12,8 @@ var (
 	errIncompatibleModel    = errors.New("model is incompatible")
 	errParentObjectsMissing = errors.New("missing parent objects")
 	errObjectUntracked      = errors.New("object untracked")
+	errObjectRemoved        = errors.New("object removed")
+	errFilter               = errors.New("filter found illegal values")
 )
 
 var tag = "Model:"

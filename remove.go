@@ -176,6 +176,7 @@ func (m *Model) completeTrackedRemoval(identification string) error {
 			complete = false
 			break
 		}
+		// FIXME: remove timeout once resend works
 		// otherwise check modify time
 		stat, err := os.Lstat(checkPath)
 		if err != nil {
