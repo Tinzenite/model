@@ -459,7 +459,7 @@ func (m *Model) filterMessage(um *shared.UpdateMessage) error {
 	}
 	// check if part of REMOVEDIR
 	removePath := shared.TINZENITEDIR + "/" + shared.REMOVEDIR
-	if strings.HasSuffix(removePath, um.Object.Path) {
+	if strings.HasPrefix(um.Object.Path, removePath) {
 		// if not a create operation, something is wrong
 		if um.Operation != shared.OpCreate {
 			// this also catches removals WITHIN the REMOVEDIR which shouldn't happen
@@ -472,17 +472,21 @@ func (m *Model) filterMessage(um *shared.UpdateMessage) error {
 			// TODO resend creation event for own peer and ignore?
 			return errFilter
 		}
+		// if part of the removal dir structure for a removed object, disallow
+		if m.isLocalRemoved(um.Object.Name) {
+			// Object.Name works because this must only catch the parent dir which is the ID of the removed object
+			log.Println("DEBUG: removedir of already removed object!")
+			return errFilter
+		}
 		// otherwise ok, continue with other checks
 	}
 	// ensure parents exists so that operation is not on "hanging" object
 	if !m.parentsExist(shared.CreatePath(m.Root, um.Object.Path)) {
-		m.warn("Filter ran into hanging object!")
 		return errParentObjectsMissing
 	}
 	// if not create, object must be tracked
 	if um.Operation != shared.OpCreate {
 		if !m.IsTracked(um.Object.Path) {
-			m.warn("Filter found untracked object!")
 			return errObjectUntracked
 		}
 	}
