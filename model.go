@@ -469,13 +469,16 @@ func (m *Model) filterMessage(um *shared.UpdateMessage) error {
 		// if the object has already been locally notified, the dir doesn't exist anymore
 		if m.isLocalRemoved(um.Object.Identification) {
 			log.Println("DEBUG: is locally removed already!")
-			// TODO resend creation event for own peer and ignore?
+			/* TODO send removal and implement that receival of a removal will
+			write the sending peer to done too. Do this via a returned error here.*/
 			return errFilter
 		}
 		// if part of the removal dir structure for a removed object, disallow
 		if m.isLocalRemoved(um.Object.Name) {
 			// Object.Name works because this must only catch the parent dir which is the ID of the removed object
 			log.Println("DEBUG: removedir of already removed object!")
+			/* TODO send removal and implement that receival of a removal will
+			write the sending peer to done too. Do this via a returned error here.*/
 			return errFilter
 		}
 		// otherwise ok, continue with other checks
