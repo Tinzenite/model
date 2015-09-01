@@ -123,10 +123,6 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 			um := shared.CreateUpdateMessage(shared.OpModify, *remObj)
 			umList = append(umList, &um)
 		}
-		// sanity check
-		if localObj.Content != remObj.Content {
-			m.warn("SyncModel: modify has equal version but different content!")
-		}
 	}
 	// for all removed paths...
 	for _, subpath := range removed {
