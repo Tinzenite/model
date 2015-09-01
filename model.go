@@ -95,6 +95,10 @@ func (m *Model) Sync(root *shared.ObjectInfo) ([]*shared.UpdateMessage, error) {
 			m.warn("Created path", subpath, "doesn't exist in remote model!")
 			continue
 		}
+		// check if object has been locally removed --> we ignore it then
+		if m.isRemoved(remObj.Identification) {
+			continue
+		}
 		log.Println("DEBUG: creating", subpath)
 		um := shared.CreateUpdateMessage(shared.OpCreate, *remObj)
 		umList = append(umList, &um)
@@ -113,6 +117,7 @@ func (m *Model) Sync(root *shared.ObjectInfo) ([]*shared.UpdateMessage, error) {
 		}
 		// if remObj knows of an update we don't --> get it as modify
 		if !localObj.Version.Includes(remObj.Version) {
+			// NOTE: the above can NOT be equal --> that was a BUG
 			// make sure we're not allowing directories to be modified
 			if localObj.Directory {
 				// shouldn't happen but catch to be sure
