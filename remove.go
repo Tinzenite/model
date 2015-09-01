@@ -176,21 +176,6 @@ func (m *Model) completeTrackedRemoval(identification string) error {
 			complete = false
 			break
 		}
-		// FIXME: remove timeout once resend works
-		// otherwise check modify time
-		stat, err := os.Lstat(checkPath)
-		if err != nil {
-			m.warn("Failed to check modify time for peer in REMOVEDONEDIR!")
-			// if something is wrong don't remove it so we can debug it
-			complete = false
-			break
-		}
-		// check:
-		if time.Since(stat.ModTime()) < removalLocal {
-			// if modtime is smaller than timeout, not done yet
-			complete = false
-			break
-		}
 	}
 	// remove if all peers have written their peer info in REMOVEDONEDIR AND timeout reached (see above)
 	if complete {
