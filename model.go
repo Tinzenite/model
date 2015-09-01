@@ -53,11 +53,11 @@ func (m *Model) PartialUpdate(scope string) error {
 }
 
 /*
-SyncModel takes the root ObjectInfo of the foreign model and returns an amount of
+Sync takes the root ObjectInfo of the foreign model and returns an amount of
 UpdateMessages required to update the current model to the foreign model. These
 must still be applied!
 */
-func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, error) {
+func (m *Model) Sync(root *shared.ObjectInfo) ([]*shared.UpdateMessage, error) {
 	// we'll need the simple lists of the foreign model for both cases
 	foreignPaths := make(map[string]bool)
 	foreignObjs := make(map[string]*shared.ObjectInfo)
@@ -145,12 +145,12 @@ func (m *Model) SyncModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, err
 }
 
 /*
-BootstrapModel takes a foreign model and bootstraps the current one correctly.
+Bootstrap takes a foreign model and bootstraps the current one correctly.
 The foreign model will be used to determine all shared files. All other
 differences can then be synchronized as before via the update messages return by
 this function.
 */
-func (m *Model) BootstrapModel(root *shared.ObjectInfo) ([]*shared.UpdateMessage, error) {
+func (m *Model) Bootstrap(root *shared.ObjectInfo) ([]*shared.UpdateMessage, error) {
 	/*TODO for now just warn, should work though... :P */
 	if !m.IsEmpty() {
 		m.warn("bootstrap: non empty bootstrap!")
