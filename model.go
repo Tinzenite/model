@@ -99,7 +99,6 @@ func (m *Model) Sync(root *shared.ObjectInfo) ([]*shared.UpdateMessage, error) {
 		if m.isRemoved(remObj.Identification) {
 			continue
 		}
-		log.Println("DEBUG: creating", subpath)
 		um := shared.CreateUpdateMessage(shared.OpCreate, *remObj)
 		umList = append(umList, &um)
 	}
@@ -125,7 +124,6 @@ func (m *Model) Sync(root *shared.ObjectInfo) ([]*shared.UpdateMessage, error) {
 				// ignore!
 				continue
 			}
-			log.Println("DEBUG: modifing", subpath)
 			um := shared.CreateUpdateMessage(shared.OpModify, *remObj)
 			umList = append(umList, &um)
 		}
@@ -140,7 +138,6 @@ func (m *Model) Sync(root *shared.ObjectInfo) ([]*shared.UpdateMessage, error) {
 		// this works because the deletion files will already have been created, but the removal not applied to the local model yet
 		if m.isRemoved(localObj.Identification) {
 			// NOTE: we use localObj here because remote object won't exist since we need to remove it locally
-			log.Println("DEBUG: removing", subpath)
 			um := shared.CreateUpdateMessage(shared.OpRemove, *localObj)
 			umList = append(umList, &um)
 		}
