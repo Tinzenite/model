@@ -43,6 +43,8 @@ func (m *Model) localRemove(path *shared.RelativePath) error {
 		m.warn("partial update on local remove failed!")
 		// but continue on because the changes will be synchronized later then anyway
 	}
+	// update version
+	stin.Version.Increase(m.SelfID)
 	// send notify
 	notifyObj := &shared.ObjectInfo{
 		Identification: stin.Identification,

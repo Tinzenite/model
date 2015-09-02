@@ -463,6 +463,8 @@ func (m *Model) CheckMessage(um *shared.UpdateMessage) error {
 		if um.Operation != shared.OpCreate {
 			// this also catches removals WITHIN the REMOVEDIR which shouldn't happen
 			m.warn("Filter ran into disallowed operation!", um.Operation.String())
+			// TODO remove
+			log.Println("DEBUG: disallowed:", um.String())
 			return errFilter
 		}
 		// if the object has already been locally notified, the dir doesn't exist anymore
@@ -576,7 +578,6 @@ TEMPDIR named as the object indentification.
 func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
 	// NOTE that ApplyModify does NOT call filterMessage itself!
 	// TODO remove me once this bug is fixed NOTE FIXME
-	// NOTE it IS the external message that is the problem. So how do I find out where it is sent?
 	if remoteObject != nil && remoteObject.Version.IsEmpty() {
 		log.Println("DEBUG: Yup, ignoring empty version!", remoteObject.Path)
 		// quietly ignoring it for now...
