@@ -31,7 +31,7 @@ func (m *Model) localRemove(path *shared.RelativePath) error {
 		return err
 	}
 	// write peers to check and own peer to done
-	err = m.updateRemovalDir(stin.Identification, m.SelfID)
+	err = m.UpdateRemovalDir(stin.Identification, m.SelfID)
 	if err != nil {
 		m.log("failed to update removal dir for", stin.Identification)
 		return err
@@ -84,7 +84,7 @@ func (m *Model) remoteRemove(path *shared.RelativePath, remoteObject *shared.Obj
 		m.warn("remote file removed but removedir didn't yet exist!")
 	}
 	// since remote removal --> write own peer to done
-	err := m.updateRemovalDir(remoteObject.Identification, m.SelfID)
+	err := m.UpdateRemovalDir(remoteObject.Identification, m.SelfID)
 	if err != nil {
 		m.log("updating removal dir failed!")
 		return err
@@ -108,7 +108,7 @@ func (m *Model) checkRemove() error {
 	// check for each removal
 	for _, stat := range allRemovals {
 		// update removal stats and write own peer to them
-		err = m.updateRemovalDir(stat.Name(), m.SelfID)
+		err = m.UpdateRemovalDir(stat.Name(), m.SelfID)
 		if err != nil {
 			return err
 		}
@@ -197,10 +197,10 @@ func (m *Model) completeTrackedRemoval(identification string) error {
 }
 
 /*
-updateRemovalDir is an internal function that writes all known peers to check.
+UpdateRemovalDir is an internal function that writes all known peers to check.
 Also, if given, it will add the given peer to the REMOVEDONEDIR.
 */
-func (m *Model) updateRemovalDir(objIdentification, peerIdentification string) error {
+func (m *Model) UpdateRemovalDir(objIdentification, peerIdentification string) error {
 	removeDirectory := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR + "/" + objIdentification
 	// make directories if don't exist
 	if !shared.FileExists(removeDirectory) {
