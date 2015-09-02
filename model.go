@@ -241,12 +241,6 @@ be called after the file operation has been applied but before the next update!
 /*TODO catch shadow files*/
 func (m *Model) ApplyUpdateMessage(msg *shared.UpdateMessage) error {
 	var err error
-	// TODO maybe filter externally because we may need to send messages back...
-	err = m.filterMessage(msg)
-	if err != nil {
-		m.warn("Filter failed message!", err.Error())
-		return err
-	}
 	path := shared.CreatePath(m.Root, msg.Object.Path)
 	switch msg.Operation {
 	case shared.OpCreate:
@@ -446,16 +440,23 @@ func (m *Model) IsTracked(path string) bool {
 }
 
 /*
-filterMessage checks a message for special cases. Will return an error if
+CheckMessage checks a message for special cases. Will return an error if
 something is not correct. Intended to be called for all external messages.
-NOTE: is not called on direct calls of Apply*()!
+NOTE: The method returns two errors that should be checked for and handled by
+the caller specifically: ErrUpdateKnown and ErrObjectRemoved. The first signals
+the caller to discard the message because the update has already been previously
+applied to the model. The second means that the caller should resend the removal
+message as the update is for a removed object.
 */
-func (m *Model) filterMessage(um *shared.UpdateMessage) error {
+func (m *Model) CheckMessage(um *shared.UpdateMessage) error {
+	// check if the update is already known --> if yes we don't want to reapply it
+	if m.HasUpdate(um) {
+		return ErrUpdateKnown
+	}
 	// check if removed --> if yes warn and ignore update (except if a remove operation)
 	if m.isRemoved(um.Object.Identification) && um.Operation != shared.OpRemove {
-		// TODO resend removal! NOTE: implement later once removal works correctly
-		log.Println("DEBUG: TODO: resend removal!")
-		return errObjectRemoved
+		// return ErrObjectRemoved to notify that message sender must be notified of removal
+		return ErrObjectRemoved
 	}
 	// check if part of REMOVEDIR
 	removePath := shared.TINZENITEDIR + "/" + shared.REMOVEDIR
@@ -468,18 +469,14 @@ func (m *Model) filterMessage(um *shared.UpdateMessage) error {
 		}
 		// if the object has already been locally notified, the dir doesn't exist anymore
 		if m.isLocalRemoved(um.Object.Identification) {
-			log.Println("DEBUG: is locally removed already!")
-			/* TODO send removal and implement that receival of a removal will
-			write the sending peer to done too. Do this via a returned error here.*/
-			return errFilter
+			// return ErrObjectRemoved to notify that message sender must be notified of removal
+			return ErrObjectRemoved
 		}
 		// if part of the removal dir structure for a removed object, disallow
 		if m.isLocalRemoved(um.Object.Name) {
 			// Object.Name works because this must only catch the parent dir which is the ID of the removed object
-			log.Println("DEBUG: removedir of already removed object!")
-			/* TODO send removal and implement that receival of a removal will
-			write the sending peer to done too. Do this via a returned error here.*/
-			return errFilter
+			// return ErrObjectRemoved to notify that message sender must be notified of removal
+			return ErrObjectRemoved
 		}
 		// otherwise ok, continue with other checks
 	}

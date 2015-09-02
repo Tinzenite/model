@@ -5,6 +5,9 @@ import (
 	"time"
 )
 
+/*
+private errors
+*/
 var (
 	errMismatch             = errors.New("mismatch in structs")
 	errModelInconsitent     = errors.New("model tracked and staticinfo are inconsistent")
@@ -12,8 +15,15 @@ var (
 	errIncompatibleModel    = errors.New("model is incompatible")
 	errParentObjectsMissing = errors.New("missing parent objects")
 	errObjectUntracked      = errors.New("object untracked")
-	errObjectRemoved        = errors.New("object removed")
 	errFilter               = errors.New("filter found illegal values")
+)
+
+/*
+public errors
+*/
+var (
+	ErrUpdateKnown   = errors.New("update is already incorporated")
+	ErrObjectRemoved = errors.New("object removed")
 )
 
 var tag = "Model:"
