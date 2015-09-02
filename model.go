@@ -234,8 +234,9 @@ func (m *Model) HasUpdate(um *shared.UpdateMessage) bool {
 /*
 ApplyUpdateMessage takes an update message and applies it to the model. Should
 be called after the file operation has been applied but before the next update!
+NOTE: Usually model.CheckMessage should be called and handled before calling
+this method!
 */
-/*TODO catch shadow files*/
 func (m *Model) ApplyUpdateMessage(msg *shared.UpdateMessage) error {
 	var err error
 	path := shared.CreatePath(m.Root, msg.Object.Path)
