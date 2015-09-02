@@ -22,8 +22,9 @@ var (
 public errors
 */
 var (
-	ErrUpdateKnown   = errors.New("update is already incorporated")
-	ErrObjectRemoved = errors.New("object removed")
+	ErrUpdateKnown       = errors.New("update is already incorporated")
+	ErrObjectRemoved     = errors.New("object removed")
+	ErrObjectRemovalDone = errors.New("object removal locally done")
 )
 
 var tag = "Model:"

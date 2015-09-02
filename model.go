@@ -440,6 +440,9 @@ func (m *Model) IsTracked(path string) bool {
 /*
 CheckMessage checks a message for special cases. Will return an error if
 something is not correct. Intended to be called for all external messages.
+
+TODO: rewrite note... ErrObjectRemovalDone
+
 NOTE: The method returns two errors that should be checked for and handled by
 the caller specifically: ErrUpdateKnown and ErrObjectRemoved. The first signals
 the caller to discard the message because the update has already been previously
@@ -476,7 +479,7 @@ func (m *Model) CheckMessage(um *shared.UpdateMessage) error {
 		if m.isLocalRemoved(um.Object.Name) {
 			// Object.Name works because this must only catch the parent dir which is the ID of the removed object
 			// return ErrObjectRemoved to notify that message sender must be notified of removal
-			return ErrObjectRemoved
+			return ErrObjectRemovalDone
 		}
 		// otherwise ok, continue with other checks
 	}
@@ -649,7 +652,7 @@ func (m *Model) ApplyRemove(path *shared.RelativePath, remoteObject *shared.Obje
 	remoteRemove := remoteObject != nil
 	// safe guard against unwanted deletions
 	if path.RootPath() != m.Root || path.SubPath() == "" {
-		m.warn("trying to remove illegal path, will ignore!", path.FullPath())
+		m.warn("ApplyRemove: trying to remove illegal path, will ignore!", path.FullPath())
 		return nil
 	}
 	// if locally initiated, just apply

@@ -2,7 +2,6 @@ package model
 
 import (
 	"io/ioutil"
-	"log"
 	"os"
 	"time"
 
@@ -111,7 +110,6 @@ func (m *Model) checkRemove() error {
 		// update removal stats and write own peer to them
 		err = m.updateRemovalDir(stat.Name(), m.SelfID)
 		if err != nil {
-			log.Println("DEBUG: updating removal dir failed on checkRemove!", err)
 			return err
 		}
 		// check if we can complete the removal
