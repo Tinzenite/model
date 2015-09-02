@@ -31,8 +31,8 @@ func (m *Model) localRemove(path *shared.RelativePath) error {
 		m.log("LocalRemove: failed to directly remove file!")
 		return err
 	}
-	// write peers
-	err = m.writeRemovalDir(stin.Identification)
+	// write peers to check and own peer to done
+	err = m.updateRemovalDir(stin.Identification, m.SelfID)
 	if err != nil {
 		m.log("failed to update removal dir for", stin.Identification)
 		return err
@@ -82,8 +82,8 @@ func (m *Model) remoteRemove(path *shared.RelativePath, remoteObject *shared.Obj
 		// we'll create it anyway if it doesn't exist, so all ok but warn
 		m.warn("remote file removed but removedir didn't yet exist!")
 	}
-	// since remote removal --> write peer to done
-	err := m.writeRemovalDir(remoteObject.Identification)
+	// since remote removal --> write own peer to done
+	err := m.updateRemovalDir(remoteObject.Identification, m.SelfID)
 	if err != nil {
 		m.log("updating removal dir failed!")
 		return err
@@ -106,8 +106,8 @@ func (m *Model) checkRemove() error {
 	}
 	// check for each removal
 	for _, stat := range allRemovals {
-		// update removal stats (including writing own peer into DONE for all of them)
-		err = m.writeRemovalDir(stat.Name())
+		// update removal stats and write own peer to them
+		err = m.updateRemovalDir(stat.Name(), m.SelfID)
 		if err != nil {
 			log.Println("DEBUG: updating removal dir failed on checkRemove!", err)
 			return err
@@ -197,10 +197,10 @@ func (m *Model) completeTrackedRemoval(identification string) error {
 }
 
 /*
-writeRemovalDir is an internal function that writes all known peers to check
-and the own peer to done, if not already existing.
+updateRemovalDir is an internal function that writes all known peers to check.
+Also, if given, it will add the given peer to the REMOVEDONEDIR.
 */
-func (m *Model) writeRemovalDir(objIdentification string) error {
+func (m *Model) updateRemovalDir(objIdentification, peerIdentification string) error {
 	removeDirectory := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR + "/" + objIdentification
 	// make directories if don't exist
 	if !shared.FileExists(removeDirectory) {
@@ -228,15 +228,17 @@ func (m *Model) writeRemovalDir(objIdentification string) error {
 			return err
 		}
 	}
-	// write own peer into DONE
-	path := removeDirectory + "/" + shared.REMOVEDONEDIR + "/" + m.SelfID
-	// if already written don't rewrite
-	if !shared.FileExists(path) {
-		// write own peer file also to done dir as removal already applied locally
-		err = ioutil.WriteFile(path, []byte(""), shared.FILEPERMISSIONMODE)
-		if err != nil {
-			m.log("Couldn't write own peer file to", shared.REMOVEDONEDIR, "!", err.Error())
-			return err
+	// if peerIdentification isn't empty, write that peer to DONE
+	if peerIdentification != "" {
+		path := removeDirectory + "/" + shared.REMOVEDONEDIR + "/" + peerIdentification
+		// if already written don't rewrite
+		if !shared.FileExists(path) {
+			// write own peer file also to done dir as removal already applied locally
+			err = ioutil.WriteFile(path, []byte(""), shared.FILEPERMISSIONMODE)
+			if err != nil {
+				m.log("Couldn't write peer file to", shared.REMOVEDONEDIR, "!", err.Error())
+				return err
+			}
 		}
 	}
 	// update model accordingly and return
