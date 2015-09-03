@@ -22,7 +22,7 @@ var (
 public errors
 */
 var (
-	ErrUpdateKnown       = errors.New("update is already incorporated")
+	ErrIgnoreUpdate      = errors.New("update should be ignored")
 	ErrObjectRemoved     = errors.New("object removed")
 	ErrObjectRemovalDone = errors.New("object removal locally done")
 )

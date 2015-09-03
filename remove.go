@@ -128,7 +128,7 @@ func (m *Model) checkRemove() error {
 		subPath, err := m.GetSubPath(stat.Name())
 		// if err just skip the check (can happen if the file has been removed, so ok)
 		if err == nil && m.IsTracked(m.Root+"/"+subPath) {
-			m.warn("Removal may be unapplied!")
+			m.warn("Removal may be unapplied!", subPath)
 		}
 	}
 	// also remove old local remove notifies:

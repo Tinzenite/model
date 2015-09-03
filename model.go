@@ -135,8 +135,11 @@ func (m *Model) Sync(root *shared.ObjectInfo) ([]*shared.UpdateMessage, error) {
 			m.log("SyncModel: failed to fetch local obj for remove check!")
 			continue
 		}
-		// this works because the deletion files will already have been created, but the removal not applied to the local model yet
-		if m.isRemoved(localObj.Identification) {
+		// to detect if the object has been deleted, check if the the removedir exists for it
+		checkPath := shared.TINZENITEDIR + "/" + shared.REMOVEDIR + "/" + localObj.Identification
+		_, isRemoved := foreignPaths[checkPath]
+		// if it exists it has been deleted
+		if isRemoved {
 			// NOTE: we use localObj here because remote object won't exist since we need to remove it locally
 			um := shared.CreateUpdateMessage(shared.OpRemove, *localObj)
 			umList = append(umList, &um)
@@ -452,7 +455,7 @@ message as the update is for a removed object.
 func (m *Model) CheckMessage(um *shared.UpdateMessage) error {
 	// check if the update is already known --> if yes we don't want to reapply it
 	if m.HasUpdate(um) {
-		return ErrUpdateKnown
+		return ErrIgnoreUpdate
 	}
 	// check if removed --> if yes warn and ignore update (except if a remove operation)
 	if m.isRemoved(um.Object.Identification) && um.Operation != shared.OpRemove {
@@ -469,6 +472,11 @@ func (m *Model) CheckMessage(um *shared.UpdateMessage) error {
 			// TODO remove
 			log.Println("DEBUG: disallowed:", um.String())
 			return errFilter
+		}
+		// if parent for removal dir doesn't exist --> ignore
+		if !m.parentsExist(shared.CreatePath(m.Root, um.Object.Path)) {
+			// this is different becuase it may and can happen in normal usage
+			return ErrIgnoreUpdate
 		}
 		// if the object has already been locally notified, the dir doesn't exist anymore
 		if m.isLocalRemoved(um.Object.Identification) {
