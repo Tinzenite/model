@@ -590,9 +590,9 @@ func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.Obje
 	// NOTE that ApplyModify does NOT call filterMessage itself!
 	// TODO remove me once this bug is fixed NOTE FIXME WHERE DOES IT COME FROM?!?!
 	if remoteObject != nil && remoteObject.Version.IsEmpty() {
-		log.Println("DEBUG: Yup, ignoring empty version!", remoteObject.String())
+		log.Println("DEBUG: Yup, ignoring empty version!", remoteObject.Path)
 		// NOTE: doesn't happen from remote apply via chan interface...
-		return errors.New("DA FUQ?")
+		return nil
 	}
 	// fetch stin
 	stin, ok := m.StaticInfos[path.SubPath()]
