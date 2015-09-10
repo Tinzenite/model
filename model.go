@@ -445,6 +445,8 @@ CheckMessage checks a message for special cases. Will return an error if
 something is not correct. Intended to be called for all external messages.
 
 TODO: rewrite note... ErrObjectRemovalDone
+TODO: Will always return updated updateMessage (although may be unmodified if not
+necessary.)
 
 NOTE: The method returns two errors that should be checked for and handled by
 the caller specifically: ErrUpdateKnown and ErrObjectRemoved. The first signals
@@ -452,15 +454,26 @@ the caller to discard the message because the update has already been previously
 applied to the model. The second means that the caller should resend the removal
 message as the update is for a removed object.
 */
-func (m *Model) CheckMessage(um *shared.UpdateMessage) error {
+func (m *Model) CheckMessage(um *shared.UpdateMessage) (*shared.UpdateMessage, error) {
 	// check if the update is already known --> if yes we don't want to reapply it
 	if m.HasUpdate(um) {
-		return ErrIgnoreUpdate
+		return um, ErrIgnoreUpdate
+	}
+	// check if modify for unknown object --> make message a create operation
+	if !m.IsTracked(um.Object.Path) && um.Operation == shared.OpModify {
+		// this can happen for example if a transfer has not yet completed and we
+		// already received a modify
+		um.Operation = shared.OpCreate
+	}
+	// check if create for known object --> make message a modify operation
+	if m.IsTracked(um.Object.Path) && um.Operation == shared.OpCreate {
+		// note that this may well cause a merge, which is the desired behaviour
+		um.Operation = shared.OpModify
 	}
 	// check if removed --> if yes warn and ignore update (except if a remove operation)
 	if m.isRemoved(um.Object.Identification) && um.Operation != shared.OpRemove {
 		// return ErrObjectRemoved to notify that message sender must be notified of removal
-		return ErrObjectRemoved
+		return um, ErrObjectRemoved
 	}
 	// check if part of REMOVEDIR
 	removePath := shared.TINZENITEDIR + "/" + shared.REMOVEDIR
@@ -471,42 +484,43 @@ func (m *Model) CheckMessage(um *shared.UpdateMessage) error {
 			m.warn("Filter ran into disallowed operation!", um.Operation.String())
 			// TODO remove
 			log.Println("DEBUG: disallowed:", um.String())
-			return errFilter
+			return um, errFilter
 		}
 		// if parent for removal dir doesn't exist --> ignore
 		if !m.parentsExist(shared.CreatePath(m.Root, um.Object.Path)) {
 			// this is different becuase it may and can happen in normal usage
-			return ErrIgnoreUpdate
+			return um, ErrIgnoreUpdate
 		}
 		// if the object has already been locally notified, the dir doesn't exist anymore
 		if m.isLocalRemoved(um.Object.Identification) {
 			// return ErrObjectRemoved to notify that message sender must be notified of removal
-			return ErrObjectRemoved
+			return um, ErrObjectRemoved
 		}
 		// if part of the removal dir structure for a removed object, disallow
 		if m.isLocalRemoved(um.Object.Name) {
 			// Object.Name works because this must only catch the parent dir which is the ID of the removed object
 			// return ErrObjectRemoved to notify that message sender must be notified of removal
-			return ErrObjectRemovalDone
+			return um, ErrObjectRemovalDone
 		}
 		// otherwise ok, continue with other checks
 	}
 	// ensure parents exists so that operation is not on "hanging" object
 	if !m.parentsExist(shared.CreatePath(m.Root, um.Object.Path)) {
-		return errParentObjectsMissing
+		return um, errParentObjectsMissing
 	}
 	// if not create, object must be tracked
 	if um.Operation != shared.OpCreate {
 		if !m.IsTracked(um.Object.Path) {
-			return errObjectUntracked
+			return um, errObjectUntracked
 		}
 	}
 	// check for empty version on modify
 	if um.Operation == shared.OpModify && um.Object.Version.IsEmpty() {
 		m.warn("Filter found empty version on modify!")
-		return errFilter
+		return um, errFilter
 	}
-	return nil
+	// if everything okay, return message so that it can be applied
+	return um, nil
 }
 
 /*
