@@ -21,10 +21,8 @@ type Model struct {
 	SelfID       string
 	TrackedPaths map[string]bool
 	StaticInfos  map[string]staticinfo
-	/*TODO make AllowLogging setable somewhere, for now always on*/
-	AllowLogging bool
 	updatechan   chan shared.UpdateMessage
-	storePath    string
+	StorePath    string
 }
 
 /*
@@ -304,7 +302,7 @@ func (m *Model) Store() error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(m.storePath, jsonBinary, shared.FILEPERMISSIONMODE)
+	return ioutil.WriteFile(m.StorePath+"/"+shared.MODELJSON, jsonBinary, shared.FILEPERMISSIONMODE)
 }
 
 /*
@@ -922,11 +920,9 @@ func (m *Model) readPeers() ([]string, error) {
 Log function that respects the AllowLogging flag.
 */
 func (m *Model) log(msg ...string) {
-	if m.AllowLogging {
-		toPrint := []string{"Model:"}
-		toPrint = append(toPrint, msg...)
-		log.Println(strings.Join(toPrint, " "))
-	}
+	toPrint := []string{"Model:"}
+	toPrint = append(toPrint, msg...)
+	log.Println(strings.Join(toPrint, " "))
 }
 
 /*

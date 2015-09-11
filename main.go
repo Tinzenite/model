@@ -13,7 +13,7 @@ Create a new model at the specified path for the given peer id. Will not
 immediately update, must be explicitely called.
 */
 func Create(root string, peerid string, storePath string) (*Model, error) {
-	if root == "" || peerid == "" {
+	if root == "" || peerid == "" || storePath == "" {
 		return nil, shared.ErrIllegalParameters
 	}
 	if !shared.IsTinzenite(root) {
@@ -24,24 +24,19 @@ func Create(root string, peerid string, storePath string) (*Model, error) {
 		TrackedPaths: make(map[string]bool),
 		StaticInfos:  make(map[string]staticinfo),
 		SelfID:       peerid,
-		AllowLogging: true,
-		storePath:    storePath}
+		StorePath:    storePath}
 	return m, nil
 }
 
 /*
-Load a model for the given path, depending whether a model.json exists for it
-already.
+Load a model from the given path.
 */
-func Load(root string) (*Model, error) {
-	if root == "" {
+func Load(path string) (*Model, error) {
+	if path == "" {
 		return nil, shared.ErrIllegalParameters
 	}
-	if !shared.IsTinzenite(root) {
-		return nil, shared.ErrNotTinzenite
-	}
 	var m *Model
-	data, err := ioutil.ReadFile(root + "/" + shared.TINZENITEDIR + "/" + shared.LOCALDIR + "/" + shared.MODELJSON)
+	data, err := ioutil.ReadFile(path + "/" + shared.MODELJSON)
 	if err != nil {
 		return nil, err
 	}
