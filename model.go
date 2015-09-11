@@ -531,7 +531,10 @@ named as the object indentification.
 func (m *Model) ApplyCreate(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
 	// NOTE that ApplyCreate does NOT call filterMessage itself!
 	// ensure no file has been written already
-	localExists := shared.FileExists(path.FullPath())
+	localExists, err := shared.ObjectExists(path.FullPath())
+	if err != nil {
+		return err
+	}
 	// sanity check if the object already exists locally
 	if m.IsTracked(path.FullPath()) {
 		if localExists {
@@ -544,7 +547,6 @@ func (m *Model) ApplyCreate(path *shared.RelativePath, remoteObject *shared.Obje
 	}
 	// we don't explicitely check m.Objinfo because we'll just overwrite it if already exists
 	var stin *staticinfo
-	var err error
 	// if remote create
 	if remoteObject != nil {
 		// create conflict if locally exists

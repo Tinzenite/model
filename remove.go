@@ -171,8 +171,15 @@ func (m *Model) completeTrackedRemoval(identification string) error {
 	complete := true
 	for _, peerStat := range allCheck {
 		checkPath := objRemovePath + "/" + shared.REMOVEDONEDIR + "/" + peerStat.Name()
+		exists, err := shared.FileExists(checkPath)
+		if err != nil {
+			// if any error we are done, so break
+			m.log("Failed checking for peer:", err.Error())
+			complete = false
+			break
+		}
 		// if a peer doesn't exist yet the removal is NOT yet complete, so break
-		if !shared.FileExists(checkPath) {
+		if !exists {
 			complete = false
 			break
 		}
@@ -203,7 +210,7 @@ Also, if given, it will add the given peer to the REMOVEDONEDIR.
 func (m *Model) UpdateRemovalDir(objIdentification, peerIdentification string) error {
 	removeDirectory := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR + "/" + objIdentification
 	// make directories if don't exist
-	if !shared.FileExists(removeDirectory) {
+	if exists, _ := shared.DirectoryExists(removeDirectory); !exists {
 		err := shared.MakeDirectories(removeDirectory, shared.REMOVECHECKDIR, shared.REMOVEDONEDIR)
 		if err != nil {
 			m.log("making removedir error")
@@ -219,7 +226,7 @@ func (m *Model) UpdateRemovalDir(objIdentification, peerIdentification string) e
 	for _, peer := range peers {
 		path := removeDirectory + "/" + shared.REMOVECHECKDIR + "/" + peer
 		// if already written don't rewrite
-		if shared.FileExists(path) {
+		if exists, _ := shared.FileExists(path); exists {
 			continue
 		}
 		err = ioutil.WriteFile(path, []byte(""), shared.FILEPERMISSIONMODE)
@@ -232,7 +239,7 @@ func (m *Model) UpdateRemovalDir(objIdentification, peerIdentification string) e
 	if peerIdentification != "" {
 		path := removeDirectory + "/" + shared.REMOVEDONEDIR + "/" + peerIdentification
 		// if already written don't rewrite
-		if !shared.FileExists(path) {
+		if exists, _ := shared.FileExists(path); !exists {
 			// write own peer file also to done dir as removal already applied locally
 			err = ioutil.WriteFile(path, []byte(""), shared.FILEPERMISSIONMODE)
 			if err != nil {
@@ -261,7 +268,7 @@ func (m *Model) directRemove(path *shared.RelativePath) error {
 	for obj := range objList {
 		relPath := path.Apply(obj)
 		// if it still exists --> remove
-		if shared.FileExists(relPath.FullPath()) {
+		if exists, _ := shared.ObjectExists(relPath.FullPath()); exists {
 			err := os.RemoveAll(relPath.FullPath())
 			if err != nil {
 				m.log("directRemove failed to remove the file itself!")
@@ -281,7 +288,8 @@ been locally removed completely.
 */
 func (m *Model) isRemoved(identification string) bool {
 	path := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR + "/" + identification
-	return shared.FileExists(path) || m.isLocalRemoved(identification)
+	exists, _ := shared.FileExists(path)
+	return exists || m.isLocalRemoved(identification)
 }
 
 /*
@@ -299,5 +307,6 @@ was completely accepted.
 */
 func (m *Model) isLocalRemoved(identification string) bool {
 	path := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.LOCALDIR + "/" + shared.REMOVESTOREDIR + "/" + identification
-	return shared.FileExists(path)
+	exists, _ := shared.FileExists(path)
+	return exists
 }
