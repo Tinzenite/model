@@ -12,7 +12,7 @@ import (
 Create a new model at the specified path for the given peer id. Will not
 immediately update, must be explicitely called.
 */
-func Create(root, peerid string) (*Model, error) {
+func Create(root string, peerid string, storePath string) (*Model, error) {
 	if root == "" || peerid == "" {
 		return nil, shared.ErrIllegalParameters
 	}
@@ -24,7 +24,8 @@ func Create(root, peerid string) (*Model, error) {
 		TrackedPaths: make(map[string]bool),
 		StaticInfos:  make(map[string]staticinfo),
 		SelfID:       peerid,
-		AllowLogging: true}
+		AllowLogging: true,
+		storePath:    storePath}
 	return m, nil
 }
 

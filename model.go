@@ -24,6 +24,7 @@ type Model struct {
 	/*TODO make AllowLogging setable somewhere, for now always on*/
 	AllowLogging bool
 	updatechan   chan shared.UpdateMessage
+	storePath    string
 }
 
 /*
@@ -299,12 +300,11 @@ func (m *Model) Read() (*shared.ObjectInfo, error) {
 Store the model to disk in the correct directory.
 */
 func (m *Model) Store() error {
-	path := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.LOCALDIR + "/" + shared.MODELJSON
 	jsonBinary, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(path, jsonBinary, shared.FILEPERMISSIONMODE)
+	return ioutil.WriteFile(m.storePath, jsonBinary, shared.FILEPERMISSIONMODE)
 }
 
 /*
