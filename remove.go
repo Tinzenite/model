@@ -37,7 +37,7 @@ func (m *Model) localRemove(path *shared.RelativePath) error {
 		return err
 	}
 	// update removal dir here so that creations etc are sent before notify below!
-	err = m.updateLocal(m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR + "/" + stin.Identification)
+	err = m.updateLocal(m.RootPath + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR + "/" + stin.Identification)
 	if err != nil {
 		m.warn("partial update on local remove failed!")
 		// but continue on because the changes will be synchronized later then anyway
@@ -99,7 +99,7 @@ checkRemove checks whether a remove can be finally applied and purged from the
 model dependent on the peers in done and check.
 */
 func (m *Model) checkRemove() error {
-	removeDir := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR
+	removeDir := m.RootPath + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR
 	allRemovals, err := ioutil.ReadDir(removeDir)
 	if err != nil {
 		m.log("reading all removals failed")
@@ -127,12 +127,12 @@ func (m *Model) checkRemove() error {
 		// warn of possibly unapplied removals:
 		subPath, err := m.GetSubPath(stat.Name())
 		// if err just skip the check (can happen if the file has been removed, so ok)
-		if err == nil && m.IsTracked(m.Root+"/"+subPath) {
+		if err == nil && m.IsTracked(m.RootPath+"/"+subPath) {
 			m.warn("Removal may be unapplied!", subPath)
 		}
 	}
 	// also remove old local remove notifies:
-	localDir := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.LOCALDIR + "/" + shared.REMOVESTOREDIR
+	localDir := m.RootPath + "/" + shared.TINZENITEDIR + "/" + shared.LOCALDIR + "/" + shared.REMOVESTOREDIR
 	allLocals, err := ioutil.ReadDir(localDir)
 	if err != nil {
 		m.log("reading of local remove notifies failed!")
@@ -156,7 +156,7 @@ it with a local notify of the removal. This allows the tracked removal to be
 purged. After a time out the local notify is also removed.
 */
 func (m *Model) completeTrackedRemoval(identification string) error {
-	removeDir := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR
+	removeDir := m.RootPath + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR
 	// working directory
 	objRemovePath := removeDir + "/" + identification
 	// read all peers to check for
@@ -193,7 +193,7 @@ func (m *Model) completeTrackedRemoval(identification string) error {
 			return err
 		}
 		// HARD delete the entire dir: all peers should do the same (soft delete would make removal recursive)
-		err = m.directRemove(shared.CreatePathRoot(m.Root).Apply(objRemovePath))
+		err = m.directRemove(shared.CreatePathRoot(m.RootPath).Apply(objRemovePath))
 		if err != nil {
 			m.log("Failed to direct remove!")
 			return err
@@ -208,7 +208,7 @@ UpdateRemovalDir is an internal function that writes all known peers to check.
 Also, if given, it will add the given peer to the REMOVEDONEDIR.
 */
 func (m *Model) UpdateRemovalDir(objIdentification, peerIdentification string) error {
-	removeDirectory := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR + "/" + objIdentification
+	removeDirectory := m.RootPath + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR + "/" + objIdentification
 	// make directories if don't exist
 	if exists, _ := shared.DirectoryExists(removeDirectory); !exists {
 		err := shared.MakeDirectories(removeDirectory, shared.REMOVECHECKDIR, shared.REMOVEDONEDIR)
@@ -287,7 +287,7 @@ isRemoved checks whether a file is due for deletion or whether it has already
 been locally removed completely.
 */
 func (m *Model) isRemoved(identification string) bool {
-	path := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR + "/" + identification
+	path := m.RootPath + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR + "/" + identification
 	exists, _ := shared.FileExists(path)
 	return exists || m.isLocalRemoved(identification)
 }
@@ -297,7 +297,7 @@ makeLocalRemove is used to locally remember which removals have been applied
 already, meaning the shared tracking of a file deletion has been removed.
 */
 func (m *Model) makeLocalRemove(identification string) error {
-	path := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.LOCALDIR + "/" + shared.REMOVESTOREDIR + "/" + identification
+	path := m.RootPath + "/" + shared.TINZENITEDIR + "/" + shared.LOCALDIR + "/" + shared.REMOVESTOREDIR + "/" + identification
 	return ioutil.WriteFile(path, []byte(""), shared.FILEPERMISSIONMODE)
 }
 
@@ -306,7 +306,7 @@ isLocalRemoved notes whether a deletion may be being reintroduced even though it
 was completely accepted.
 */
 func (m *Model) isLocalRemoved(identification string) bool {
-	path := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.LOCALDIR + "/" + shared.REMOVESTOREDIR + "/" + identification
+	path := m.RootPath + "/" + shared.TINZENITEDIR + "/" + shared.LOCALDIR + "/" + shared.REMOVESTOREDIR + "/" + identification
 	exists, _ := shared.FileExists(path)
 	return exists
 }

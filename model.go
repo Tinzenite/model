@@ -17,19 +17,19 @@ import (
 Model of a directory and its contents.
 */
 type Model struct {
-	Root         string
+	RootPath     string
+	StorePath    string
 	SelfID       string
 	TrackedPaths map[string]bool
 	StaticInfos  map[string]staticinfo
 	updatechan   chan shared.UpdateMessage
-	StorePath    string
 }
 
 /*
 Update the complete model state.
 */
 func (m *Model) Update() error {
-	return m.PartialUpdate(m.Root)
+	return m.PartialUpdate(m.RootPath)
 }
 
 /*
@@ -74,7 +74,7 @@ func (m *Model) Sync(root *shared.ObjectInfo) ([]*shared.UpdateMessage, error) {
 		m.log("SyncModel: auth doesn't exist in foreign model!")
 		return nil, shared.ErrIllegalFileState
 	}
-	localAuth, err := m.GetInfo(shared.CreatePath(m.Root, authPath))
+	localAuth, err := m.GetInfo(shared.CreatePath(m.RootPath, authPath))
 	if err != nil {
 		m.log("SyncModel: local model doesn't have auth!")
 		return nil, shared.ErrIllegalFileState
@@ -84,7 +84,7 @@ func (m *Model) Sync(root *shared.ObjectInfo) ([]*shared.UpdateMessage, error) {
 		return nil, errIncompatibleModel
 	}
 	// compare to local version
-	created, modified, removed := m.compareMaps(m.Root, foreignPaths)
+	created, modified, removed := m.compareMaps(m.RootPath, foreignPaths)
 	// build update messages
 	var umList []*shared.UpdateMessage
 	// for all created paths...
@@ -103,7 +103,7 @@ func (m *Model) Sync(root *shared.ObjectInfo) ([]*shared.UpdateMessage, error) {
 	}
 	// for all modified paths...
 	for _, subpath := range modified {
-		localObj, err := m.GetInfo(shared.CreatePath(m.Root, subpath))
+		localObj, err := m.GetInfo(shared.CreatePath(m.RootPath, subpath))
 		if err != nil {
 			m.log("SyncModel: failed to fetch local obj for modify check!")
 			continue
@@ -129,7 +129,7 @@ func (m *Model) Sync(root *shared.ObjectInfo) ([]*shared.UpdateMessage, error) {
 	}
 	// for all removed paths...
 	for _, subpath := range removed {
-		localObj, err := m.GetInfo(shared.CreatePath(m.Root, subpath))
+		localObj, err := m.GetInfo(shared.CreatePath(m.RootPath, subpath))
 		if err != nil {
 			m.log("SyncModel: failed to fetch local obj for remove check!")
 			continue
@@ -241,7 +241,7 @@ this method!
 */
 func (m *Model) ApplyUpdateMessage(msg *shared.UpdateMessage) error {
 	var err error
-	path := shared.CreatePath(m.Root, msg.Object.Path)
+	path := shared.CreatePath(m.RootPath, msg.Object.Path)
 	switch msg.Operation {
 	case shared.OpCreate:
 		err = m.ApplyCreate(path, &msg.Object)
@@ -275,7 +275,7 @@ of the model: hashes etc are not recalculated.
 */
 func (m *Model) Read() (*shared.ObjectInfo, error) {
 	var allObjs shared.Sortable
-	rpath := shared.CreatePathRoot(m.Root)
+	rpath := shared.CreatePathRoot(m.RootPath)
 	// getting all Objectinfos is very fast because the staticinfo already exists for all of them
 	for fullpath := range m.TrackedPaths {
 		obj, err := m.GetInfo(rpath.Apply(fullpath))
@@ -336,7 +336,7 @@ func (m *Model) GetInfoFrom(identification string) (*shared.ObjectInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	return m.GetInfo(shared.CreatePath(m.Root, subpath))
+	return m.GetInfo(shared.CreatePath(m.RootPath, subpath))
 }
 
 /*
@@ -385,13 +385,13 @@ func (m *Model) FillInfo(root *shared.ObjectInfo, all []*shared.ObjectInfo) *sha
 		// this may be an error, check later
 		return root
 	}
-	rpath := shared.CreatePath(m.Root, root.Path)
+	rpath := shared.CreatePath(m.RootPath, root.Path)
 	for _, obj := range all {
 		if obj == root {
 			// skip self
 			continue
 		}
-		path := rpath.Apply(m.Root + "/" + obj.Path)
+		path := rpath.Apply(m.RootPath + "/" + obj.Path)
 		if path.Depth() != rpath.Depth()+1 {
 			// ignore any out of depth objects
 			continue
@@ -432,7 +432,7 @@ func (m *Model) IsEmpty() bool {
 IsTracked returns true if the given path is tracked by this model.
 */
 func (m *Model) IsTracked(path string) bool {
-	relPath := shared.CreatePathRoot(m.Root).Apply(path)
+	relPath := shared.CreatePathRoot(m.RootPath).Apply(path)
 	_, pathExists := m.TrackedPaths[relPath.SubPath()]
 	_, stinExists := m.StaticInfos[relPath.SubPath()]
 	return pathExists && stinExists
@@ -485,7 +485,7 @@ func (m *Model) CheckMessage(um *shared.UpdateMessage) (*shared.UpdateMessage, e
 			return um, errFilter
 		}
 		// if parent for removal dir doesn't exist --> ignore
-		if !m.parentsExist(shared.CreatePath(m.Root, um.Object.Path)) {
+		if !m.parentsExist(shared.CreatePath(m.RootPath, um.Object.Path)) {
 			// this is different becuase it may and can happen in normal usage
 			return um, ErrIgnoreUpdate
 		}
@@ -503,7 +503,7 @@ func (m *Model) CheckMessage(um *shared.UpdateMessage) (*shared.UpdateMessage, e
 		// otherwise ok, continue with other checks
 	}
 	// ensure parents exists so that operation is not on "hanging" object
-	if !m.parentsExist(shared.CreatePath(m.Root, um.Object.Path)) {
+	if !m.parentsExist(shared.CreatePath(m.RootPath, um.Object.Path)) {
 		return um, errParentObjectsMissing
 	}
 	// if not create, object must be tracked
@@ -673,7 +673,7 @@ func (m *Model) ApplyRemove(path *shared.RelativePath, remoteObject *shared.Obje
 	// NOTE that ApplyCreate does NOT call filterMessage itself!
 	remoteRemove := remoteObject != nil
 	// safe guard against unwanted deletions
-	if path.RootPath() != m.Root || path.SubPath() == "" {
+	if path.RootPath() != m.RootPath || path.SubPath() == "" {
 		m.warn("ApplyRemove: trying to remove illegal path, will ignore!", path.FullPath())
 		return nil
 	}
@@ -699,7 +699,7 @@ func (m *Model) updateLocal(scope string) error {
 	// now get differences
 	created, modified, removed := m.compareMaps(scope, current)
 	// will need this for every Op so create only once
-	relPath := shared.CreatePathRoot(m.Root)
+	relPath := shared.CreatePathRoot(m.RootPath)
 	// first check creations
 	for _, subpath := range created {
 		err := m.ApplyCreate(relPath.Apply(subpath), nil)
@@ -742,7 +742,8 @@ func (m *Model) compareMaps(scope string, current map[string]bool) ([]string, []
 	var created, modified, removed []string
 	for subpath := range m.TrackedPaths {
 		// ignore if not in partial update path AND not part of path to scope
-		if !strings.HasPrefix(m.Root+"/"+subpath, scope) && !strings.Contains(scope, m.Root+"/"+subpath) {
+		if !strings.HasPrefix(m.RootPath+"/"+subpath, scope) &&
+			!strings.Contains(scope, m.RootPath+"/"+subpath) {
 			continue
 		}
 		_, ok := current[subpath]
@@ -758,7 +759,8 @@ func (m *Model) compareMaps(scope string, current map[string]bool) ([]string, []
 	// CREATED - any remaining paths are yet untracked in m.tracked
 	for subpath := range current {
 		// ignore if not in partial update path AND not part of path to scope
-		if !strings.HasPrefix(m.Root+"/"+subpath, scope) && !strings.Contains(scope, m.Root+"/"+subpath) {
+		if !strings.HasPrefix(m.RootPath+"/"+subpath, scope) &&
+			!strings.Contains(scope, m.RootPath+"/"+subpath) {
 			continue
 		}
 		created = append(created, subpath)
@@ -822,7 +824,7 @@ applyFile from temp dir to correct path. Checks and executes the move.
 */
 func (m *Model) applyFile(identification string, path string) error {
 	// path to were the modified file sits before being applied
-	temppath := m.Root + "/" + shared.TINZENITEDIR + "/" + shared.TEMPDIR + "/" + identification
+	temppath := m.RootPath + "/" + shared.TINZENITEDIR + "/" + shared.TEMPDIR + "/" + identification
 	// check that it exists
 	_, err := os.Lstat(temppath)
 	if err != nil {
@@ -859,7 +861,7 @@ populateMap for the m.root path with all file and directory contents, with the
 matcher applied if applicable.
 */
 func (m *Model) populateMap() (map[string]bool, error) {
-	return m.partialPopulateMap(m.Root)
+	return m.partialPopulateMap(m.RootPath)
 }
 
 /*
@@ -867,7 +869,7 @@ partialPopulateMap for the given path with all file and directory contents withi
 the given path, with the matcher applied if applicable.
 */
 func (m *Model) partialPopulateMap(rootPath string) (map[string]bool, error) {
-	relPath := shared.CreatePathRoot(m.Root).Apply(rootPath)
+	relPath := shared.CreatePathRoot(m.RootPath).Apply(rootPath)
 	master, err := CreateMatcher(relPath.RootPath())
 	if err != nil {
 		return nil, err
@@ -906,7 +908,7 @@ of their IDs.
 */
 func (m *Model) readPeers() ([]string, error) {
 	var IDs []string
-	peers, err := shared.LoadPeers(m.Root)
+	peers, err := shared.LoadPeers(m.RootPath)
 	if err != nil {
 		return nil, err
 	}

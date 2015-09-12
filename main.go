@@ -20,7 +20,7 @@ func Create(root string, peerid string, storePath string) (*Model, error) {
 		return nil, shared.ErrNotTinzenite
 	}
 	m := &Model{
-		Root:         root,
+		RootPath:     root,
 		TrackedPaths: make(map[string]bool),
 		StaticInfos:  make(map[string]staticinfo),
 		SelfID:       peerid,
