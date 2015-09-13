@@ -29,9 +29,9 @@ func Create(root string, peerid string, storePath string) (*Model, error) {
 }
 
 /*
-Load a model from the given path.
+LoadFrom the given path a model.
 */
-func Load(path string) (*Model, error) {
+func LoadFrom(path string) (*Model, error) {
 	if path == "" {
 		return nil, shared.ErrIllegalParameters
 	}

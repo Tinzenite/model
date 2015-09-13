@@ -12,20 +12,24 @@ func TestCreate(t *testing.T) {
 	root := makeDefaultDirectory()
 	defer removeTemp(root)
 	// test normal legal create
-	_, err := Create(root, PEERID)
+	_, err := Create(root, PEERID, root+"/"+shared.STOREMODELDIR)
 	if err != nil {
 		t.Error(err)
 	}
 	// test illegal parameters
-	_, err = Create(root, "")
+	_, err = Create(root, "", root+"/"+shared.STOREMODELDIR)
 	if err != shared.ErrIllegalParameters {
 		t.Error("Expected", shared.ErrIllegalParameters, "got", err)
 	}
-	_, err = Create("", PEERID)
+	_, err = Create("", PEERID, "/"+shared.STOREMODELDIR)
 	if err != shared.ErrIllegalParameters {
 		t.Error("Expected", shared.ErrIllegalParameters, "got", err)
 	}
-	_, err = Create("", "")
+	_, err = Create(root, PEERID, "")
+	if err != shared.ErrIllegalParameters {
+		t.Error("Expected", shared.ErrIllegalParameters, "got", err)
+	}
+	_, err = Create("", "", "")
 	if err != shared.ErrIllegalParameters {
 		t.Error("Expected", shared.ErrIllegalParameters, "got", err)
 	}
@@ -35,20 +39,20 @@ func TestLoad(t *testing.T) {
 	root := makeDefaultDirectory()
 	defer removeTemp(root)
 	// must first create, update, and store a model so that we can load it
-	model, _ := Create(root, PEERID)
+	model, _ := Create(root, PEERID, root+"/"+shared.STOREMODELDIR)
 	model.Update()
 	model.Store()
 	// load
-	loaded, err := Load(root)
+	loaded, err := LoadFrom(root + "/" + shared.STOREMODELDIR)
 	if err != nil {
-		t.Log(err)
+		t.Log("Load failed:", err)
 	}
 	// sanity check
 	if loaded.IsEmpty() {
 		t.Log("Expected loaded to be non empty!")
 	}
 	// check with wrong parameter
-	_, err = Load("")
+	_, err = LoadFrom("")
 	if err != shared.ErrIllegalParameters {
 		t.Error("Expected", shared.ErrIllegalParameters, "got", err)
 	}
@@ -58,7 +62,7 @@ func TestModel_IsEmpty(t *testing.T) {
 	root := makeDefaultDirectory()
 	defer removeTemp(root)
 	// make model
-	model, _ := Create(root, PEERID)
+	model, _ := Create(root, PEERID, root+"/"+shared.STOREMODELDIR)
 	// should be empty since we haven't updated model yet
 	if !model.IsEmpty() {
 		t.Error("Expected IsEmpty to return true")
@@ -75,7 +79,7 @@ func TestModel_IsTracked(t *testing.T) {
 	root := makeDefaultDirectory()
 	defer removeTemp(root)
 	// make model
-	model, _ := Create(root, PEERID)
+	model, _ := Create(root, PEERID, root+"/"+shared.STOREMODELDIR)
 	// shouldn't be tracked yet
 	if model.IsTracked(root) == true {
 		t.Error("Expected IsTracked to return true")
@@ -91,7 +95,7 @@ func TestModel_Update(t *testing.T) {
 	root := makeDefaultDirectory()
 	defer removeTemp(root)
 	// create model
-	model, _ := Create(root, PEERID)
+	model, _ := Create(root, PEERID, root+"/"+shared.STOREMODELDIR)
 	// test default update
 	err := model.Update()
 	if err != nil {
@@ -115,7 +119,7 @@ func TestModel_PartialUpdate(t *testing.T) {
 	root := makeDefaultDirectory()
 	defer removeTemp(root)
 	// create model
-	model, _ := Create(root, PEERID)
+	model, _ := Create(root, PEERID, root+"/"+shared.STOREMODELDIR)
 	_ = model.Update()
 	// make subdir which we want tracked and file we don't want tracked
 	subdir := makeTempDir(root, "track")
