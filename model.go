@@ -876,6 +876,12 @@ func (m *Model) partialPopulateMap(rootPath string) (map[string]bool, error) {
 	}
 	tracked := make(map[string]bool)
 	filepath.Walk(relPath.FullPath(), func(subpath string, stat os.FileInfo, inerr error) error {
+		// if we have an error or stat is nil, handle this error (can happen if objects get ignored since last populate)
+		if inerr != nil || stat == nil {
+			// we ignore this dir, equating it to a removal, so just return nil
+			// FIXME model will now always WARN: removal may be unapplied! <-- how to catch / fix this?
+			return nil
+		}
 		// sanity check
 		thisPath := relPath.Apply(subpath)
 		if thisPath.FullPath() != subpath {
