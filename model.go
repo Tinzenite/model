@@ -55,6 +55,8 @@ func (m *Model) PartialUpdate(scope string) error {
 Sync takes the root ObjectInfo of the foreign model and returns an amount of
 UpdateMessages required to update the current model to the foreign model. These
 must still be applied!
+
+NOTE: Will not check and enforce that the models are compatible!
 */
 func (m *Model) Sync(root *shared.ObjectInfo) ([]*shared.UpdateMessage, error) {
 	// we'll need the simple lists of the foreign model for both cases
@@ -67,22 +69,6 @@ func (m *Model) Sync(root *shared.ObjectInfo) ([]*shared.UpdateMessage, error) {
 		obj.Objects = nil
 		foreignObjs[obj.Path] = &obj
 	})
-	// make sure that the .TINZENITEDIR is compatible!
-	authPath := shared.TINZENITEDIR + "/" + shared.ORGDIR + "/" + shared.AUTHJSON
-	foreignAuth, exists := foreignObjs[authPath]
-	if !exists {
-		m.log("SyncModel: auth doesn't exist in foreign model!")
-		return nil, shared.ErrIllegalFileState
-	}
-	localAuth, err := m.GetInfo(shared.CreatePath(m.RootPath, authPath))
-	if err != nil {
-		m.log("SyncModel: local model doesn't have auth!")
-		return nil, shared.ErrIllegalFileState
-	}
-	if foreignAuth.Content != localAuth.Content {
-		m.log("SyncModel: models seem to be incompatible!")
-		return nil, errIncompatibleModel
-	}
 	// compare to local version
 	created, modified, removed := m.compareMaps(m.RootPath, foreignPaths)
 	// build update messages
@@ -766,7 +752,7 @@ func (m *Model) compareMaps(scope string, current map[string]bool) ([]string, []
 		created = append(created, subpath)
 	}
 	// it is important to return these sorted: create dirs before their contents for example
-	return sortPaths(created), sortPaths(modified), sortPaths(removed)
+	return shared.SortString(created), shared.SortString(modified), shared.SortString(removed)
 }
 
 /*
