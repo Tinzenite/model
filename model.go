@@ -724,34 +724,36 @@ applied to the internal model to match the current path map. NOTE: the modified
 list must still be checked if they actually WERE modified!
 */
 func (m *Model) compareMaps(scope string, current map[string]bool) ([]string, []string, []string) {
-	// now: compare old tracked with new version
+	// get what was modified
+	tempCreated, tempModified, tempRemoved := shared.Difference(m.TrackedPaths, current)
+	// prepare slices for changes we're actually interested in
 	var created, modified, removed []string
-	for subpath := range m.TrackedPaths {
-		// ignore if not in partial update path AND not part of path to scope
-		if !strings.HasPrefix(m.RootPath+"/"+subpath, scope) &&
-			!strings.Contains(scope, m.RootPath+"/"+subpath) {
-			continue
-		}
-		_, ok := current[subpath]
-		if ok {
-			// paths that still exist must only be checked for MODIFY
-			delete(current, subpath)
-			modified = append(modified, subpath)
-		} else {
-			// REMOVED - paths that don't exist anymore have been removed
-			removed = append(removed, subpath)
-		}
+	// filter function: returns true if path is neither path to scope or starts with scope.
+	skip := func(path string) bool {
+		// skip if not in partial update path AND not part of path to scope
+		return !strings.HasPrefix(m.RootPath+"/"+path, scope) &&
+			!strings.Contains(scope, m.RootPath+"/"+path)
 	}
-	// CREATED - any remaining paths are yet untracked in m.tracked
-	for subpath := range current {
-		// ignore if not in partial update path AND not part of path to scope
-		if !strings.HasPrefix(m.RootPath+"/"+subpath, scope) &&
-			!strings.Contains(scope, m.RootPath+"/"+subpath) {
+	// filter out unscoped changes
+	for _, subpath := range tempCreated {
+		if skip(subpath) {
 			continue
 		}
 		created = append(created, subpath)
 	}
-	// it is important to return these sorted: create dirs before their contents for example
+	for _, subpath := range tempModified {
+		if skip(subpath) {
+			continue
+		}
+		modified = append(modified, subpath)
+	}
+	for _, subpath := range tempRemoved {
+		if skip(subpath) {
+			continue
+		}
+		removed = append(removed, subpath)
+	}
+	// sort to ensure correct order (files after their dirs, etc)
 	return shared.SortString(created), shared.SortString(modified), shared.SortString(removed)
 }
 
