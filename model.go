@@ -656,6 +656,11 @@ func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.Obje
 ApplyRemove applies a remove operation.
 */
 func (m *Model) ApplyRemove(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
+	// ensure that removals aren't removed
+	if strings.HasPrefix(path.SubPath(), shared.TINZENITEDIR+"/"+shared.REMOVEDIR) {
+		m.warn("ApplyRemove: trying to remove something WITHIN remove dir, illegal!")
+		return nil
+	}
 	// NOTE that ApplyCreate does NOT call filterMessage itself!
 	remoteRemove := remoteObject != nil
 	// safe guard against unwanted deletions

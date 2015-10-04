@@ -24,7 +24,7 @@ func (m *Model) localRemove(path *shared.RelativePath) error {
 		// shouldn't happen but let's be sure; warn at least
 		m.warn("LocalRemove: file removal already begun!")
 	}
-	// direct remove
+	// direct remove (removes file/dir AND from m.Tracked and m.Static)
 	err := m.directRemove(path)
 	if err != nil {
 		m.log("LocalRemove: failed to directly remove file!")
@@ -259,26 +259,17 @@ is specifically a part of the normal applyRemove method, do not call outside
 of it!
 */
 func (m *Model) directRemove(path *shared.RelativePath) error {
-	objList, err := m.partialPopulateMap(path.FullPath())
-	if err != nil {
-		m.log("partialPopulateMap failed in directRemove")
-		return err
-	}
-	// iterate over each path
-	for obj := range objList {
-		relPath := path.Apply(obj)
-		// if it still exists --> remove
-		if exists, _ := shared.ObjectExists(relPath.FullPath()); exists {
-			err := os.RemoveAll(relPath.FullPath())
-			if err != nil {
-				m.log("directRemove failed to remove the file itself!")
-				return err
-			}
+	// if it still exists --> remove
+	if exists, _ := shared.ObjectExists(path.FullPath()); exists {
+		err := os.RemoveAll(path.FullPath())
+		if err != nil {
+			m.log("directRemove failed to remove the file itself!")
+			return err
 		}
-		// remove from model
-		delete(m.TrackedPaths, relPath.SubPath())
-		delete(m.StaticInfos, relPath.SubPath())
 	}
+	// remove from model in any case
+	delete(m.TrackedPaths, path.SubPath())
+	delete(m.StaticInfos, path.SubPath())
 	return nil
 }
 
