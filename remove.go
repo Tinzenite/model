@@ -20,7 +20,7 @@ func (m *Model) localRemove(path *shared.RelativePath) error {
 		return shared.ErrIllegalFileState
 	}
 	// sanity check
-	if m.isRemoved(stin.Identification) {
+	if m.IsRemoved(stin.Identification) {
 		// shouldn't happen but let's be sure; warn at least
 		m.warn("LocalRemove: file removal already begun!")
 	}
@@ -66,7 +66,7 @@ func (m *Model) remoteRemove(path *shared.RelativePath, remoteObject *shared.Obj
 	}
 	// get state information
 	localFileExists := m.IsTracked(path.FullPath())
-	removalExists := m.isRemoved(remoteObject.Identification)
+	removalExists := m.IsRemoved(remoteObject.Identification)
 	// if still exists locally remove it
 	if localFileExists {
 		// remove file (removedir should already exist, so nothing else to do)
@@ -299,10 +299,10 @@ func (m *Model) directRemove(path *shared.RelativePath) error {
 }
 
 /*
-isRemoved checks whether a file is due for deletion or whether it has already
+IsRemoved checks whether a file is due for deletion or whether it has already
 been locally removed completely.
 */
-func (m *Model) isRemoved(identification string) bool {
+func (m *Model) IsRemoved(identification string) bool {
 	path := m.RootPath + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR + "/" + identification
 	exists, _ := shared.FileExists(path)
 	return exists || m.isLocalRemoved(identification)

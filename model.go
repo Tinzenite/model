@@ -81,7 +81,7 @@ func (m *Model) Sync(root *shared.ObjectInfo) ([]*shared.UpdateMessage, error) {
 			continue
 		}
 		// check if object has been locally removed --> we ignore it then
-		if m.isRemoved(remObj.Identification) {
+		if m.IsRemoved(remObj.Identification) {
 			continue
 		}
 		um := shared.CreateUpdateMessage(shared.OpCreate, *remObj)
@@ -455,7 +455,7 @@ func (m *Model) CheckMessage(um *shared.UpdateMessage) (*shared.UpdateMessage, e
 		um.Operation = shared.OpModify
 	}
 	// check if removed --> if yes warn and ignore update (except if a remove operation)
-	if m.isRemoved(um.Object.Identification) && um.Operation != shared.OpRemove {
+	if m.IsRemoved(um.Object.Identification) && um.Operation != shared.OpRemove {
 		// return ErrObjectRemoved to notify that message sender must be notified of removal
 		return um, ErrObjectRemoved
 	}
