@@ -656,9 +656,10 @@ func (m *Model) ApplyModify(path *shared.RelativePath, remoteObject *shared.Obje
 ApplyRemove applies a remove operation.
 */
 func (m *Model) ApplyRemove(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
-	// ensure that removals aren't removed
+	// removals within remove dir in ANY case are to be silently ignored
 	if strings.HasPrefix(path.SubPath(), shared.TINZENITEDIR+"/"+shared.REMOVEDIR) {
-		m.warn("ApplyRemove: trying to remove something WITHIN remove dir, illegal!")
+		// this is because removals are applied when they are checked (meaning:
+		// they are a special case and are NOT to be handled here).
 		return nil
 	}
 	// NOTE that ApplyCreate does NOT call filterMessage itself!
@@ -683,6 +684,7 @@ func (m *Model) updateLocal(scope string) error {
 	if m.TrackedPaths == nil || m.StaticInfos == nil {
 		return shared.ErrNilInternalState
 	}
+	// get current state of model paths
 	current, err := m.populateMap()
 	if err != nil {
 		return err
