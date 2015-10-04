@@ -58,8 +58,6 @@ func (m *Model) localRemove(path *shared.RelativePath) error {
 
 /*
 remoteRemove handles a remote call of remove.
-
-TODO this is buggy, fix it.
 */
 func (m *Model) remoteRemove(path *shared.RelativePath, remoteObject *shared.ObjectInfo) error {
 	// sanity check
@@ -259,7 +257,24 @@ is specifically a part of the normal applyRemove method, do not call outside
 of it!
 */
 func (m *Model) directRemove(path *shared.RelativePath) error {
-	// if it still exists --> remove
+	dir, _ := shared.DirectoryExists(path.FullPath())
+	// if directory also directRemove all children
+	if dir {
+		// get all candidates
+		children, err := m.partialPopulateMap(path.FullPath())
+		if err != nil {
+			m.warn("directRemove: failed to retrieve children of directory!")
+			return err
+		}
+		// for each recursively call directRemove
+		for subpath := range children {
+			err := m.directRemove(path.Apply(subpath))
+			if err != nil {
+				return err
+			}
+		}
+	}
+	// remove self if still exists
 	if exists, _ := shared.ObjectExists(path.FullPath()); exists {
 		err := os.RemoveAll(path.FullPath())
 		if err != nil {
@@ -267,7 +282,7 @@ func (m *Model) directRemove(path *shared.RelativePath) error {
 			return err
 		}
 	}
-	// remove from model in any case
+	// remove from model in any case (if no error)
 	delete(m.TrackedPaths, path.SubPath())
 	delete(m.StaticInfos, path.SubPath())
 	return nil
