@@ -268,6 +268,11 @@ func (m *Model) directRemove(path *shared.RelativePath) error {
 		}
 		// for each recursively call directRemove
 		for subpath := range children {
+			// partialPopulateMap returns self too, so ignore
+			if subpath == path.SubPath() {
+				continue
+			}
+			// remove all other children
 			err := m.directRemove(path.Apply(subpath))
 			if err != nil {
 				return err
