@@ -172,7 +172,7 @@ func (m *Model) completeTrackedRemoval(identification string) error {
 		exists, err := shared.FileExists(checkPath)
 		if err != nil {
 			// if any error we are done, so break
-			m.log("Failed checking for peer:", err.Error())
+			m.warn("Failed checking for peer:", err.Error())
 			complete = false
 			break
 		}
@@ -202,8 +202,8 @@ func (m *Model) completeTrackedRemoval(identification string) error {
 }
 
 /*
-UpdateRemovalDir is an internal function that writes all known peers to check.
-Also, if given, it will add the given peer to the REMOVEDONEDIR.
+UpdateRemovalDir is an internal function that writes all known trusted peers to
+check. Also, if given, it will add the given peer to the REMOVEDONEDIR.
 */
 func (m *Model) UpdateRemovalDir(objIdentification, peerIdentification string) error {
 	removeDirectory := m.RootPath + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR + "/" + objIdentification
@@ -215,21 +215,26 @@ func (m *Model) UpdateRemovalDir(objIdentification, peerIdentification string) e
 			return err
 		}
 	}
-	// write peer list to check which must all be notified of removal
-	peers, err := m.readPeers()
+	// fetch peer objects from disk
+	peers, err := shared.LoadPeers(m.RootPath)
 	if err != nil {
 		m.log("Failed to read peers")
 		return err
 	}
+	// write peer list to check which must all be notified of removal
 	for _, peer := range peers {
-		path := removeDirectory + "/" + shared.REMOVECHECKDIR + "/" + peer
+		// ignore non trusted peers (since they can never write to done dir)
+		if !peer.Trusted {
+			continue
+		}
+		path := removeDirectory + "/" + shared.REMOVECHECKDIR + "/" + peer.Identification
 		// if already written don't rewrite
 		if exists, _ := shared.FileExists(path); exists {
 			continue
 		}
 		err = ioutil.WriteFile(path, []byte(""), shared.FILEPERMISSIONMODE)
 		if err != nil {
-			m.log("Couldn't write peer file", peer, "to", shared.REMOVECHECKDIR, "!")
+			m.log("Couldn't write peer file", peer.Name, "to", shared.REMOVECHECKDIR, "!")
 			return err
 		}
 	}

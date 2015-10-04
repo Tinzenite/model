@@ -904,22 +904,6 @@ func (m *Model) partialPopulateMap(rootPath string) (map[string]bool, error) {
 }
 
 /*
-readPeers reads all the peers from the .tinzenite directory and returns a list
-of their IDs.
-*/
-func (m *Model) readPeers() ([]string, error) {
-	var IDs []string
-	peers, err := shared.LoadPeers(m.RootPath)
-	if err != nil {
-		return nil, err
-	}
-	for _, peer := range peers {
-		IDs = append(IDs, peer.Identification)
-	}
-	return IDs, nil
-}
-
-/*
 Log function that respects the AllowLogging flag.
 */
 func (m *Model) log(msg ...string) {
