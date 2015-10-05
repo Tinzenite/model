@@ -304,7 +304,7 @@ been locally removed completely.
 */
 func (m *Model) IsRemoved(identification string) bool {
 	path := m.RootPath + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR + "/" + identification
-	exists, _ := shared.FileExists(path)
+	exists, _ := shared.DirectoryExists(path)
 	return exists || m.isLocalRemoved(identification)
 }
 
