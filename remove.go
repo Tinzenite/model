@@ -208,12 +208,10 @@ check. Also, if given, it will add the given peer to the REMOVEDONEDIR.
 func (m *Model) UpdateRemovalDir(objIdentification, peerIdentification string) error {
 	removeDirectory := m.RootPath + "/" + shared.TINZENITEDIR + "/" + shared.REMOVEDIR + "/" + objIdentification
 	// make directories if don't exist
-	if exists, _ := shared.DirectoryExists(removeDirectory); !exists {
-		err := shared.MakeDirectories(removeDirectory, shared.REMOVECHECKDIR, shared.REMOVEDONEDIR)
-		if err != nil {
-			m.log("making removedir error")
-			return err
-		}
+	err := shared.MakeDirectories(removeDirectory, shared.REMOVECHECKDIR, shared.REMOVEDONEDIR)
+	if err != nil {
+		m.log("making removedir error!", err.Error())
+		return err
 	}
 	// fetch peer objects from disk
 	peers, err := shared.LoadPeers(m.RootPath)
@@ -234,7 +232,7 @@ func (m *Model) UpdateRemovalDir(objIdentification, peerIdentification string) e
 		}
 		err = ioutil.WriteFile(path, []byte(""), shared.FILEPERMISSIONMODE)
 		if err != nil {
-			m.log("Couldn't write peer file", peer.Name, "to", shared.REMOVECHECKDIR, "!")
+			m.log("Couldn't write peer file", peer.Name, "to", shared.REMOVECHECKDIR, "!", err.Error())
 			return err
 		}
 	}
